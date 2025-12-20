@@ -1,0 +1,11 @@
+The idea here is to create a prompt template or AI guidance, or something to support the following work flow
+
+1) Read a file
+2) Find the first line that starts with "#C".  This will be referred to as "the comment" or "the comment line"
+3) Read the rest of the comment line and use it as the first part of a prompt
+8) If session logging is enabled, include this comment line in the session log of the initiating prompt, clearly indicating that it is a comment line and providing information about where it was located in the document (e.g., if it was inline with a requirement, indicate which requirement it was in the log)
+4) Append to the prompt instructions to ask the user clarifying questions about the prompt
+5) Append to the prompt that after getting all clarifications, the final understanding of the prompt and clarifications is to be restated back to the user, and that all files that are intended to be changed are listed for the user before doing anything else.
+6) Submit the prompt to be processed by the AI agent to make the requested adjustments to the documents indicated in the summary back to the user.  If any additional documents need to be changed, you must ask (even if you have prior permission) to change those documents.
+7) After the changes have been made, remove the comment line from the source document.  Do not do it along with the requested changes, to preserve the comment if the session is interrupted.
+8) If session logging is enabled, log all of the user interaction and summaries of what was done as instructed elsewhere.
