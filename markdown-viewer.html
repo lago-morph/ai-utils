@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Markdown Viewer</title>
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: #f6f8fa;
+      color: #1f2328;
+    }
+
+    /* ── Toolbar ─────────────────────────────────────────────────── */
+    #toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #24292f;
+      border-bottom: 1px solid #30363d;
+    }
+    .toolbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #e6edf3;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    #toolbar-filename {
+      font-size: 12px;
+      color: #8b949e;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: auto;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 20px;
+      border: 1px solid;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .btn-secondary { color: #e6edf3; background: #21262d; border-color: #30363d; }
+    .btn-secondary:hover { background: #30363d; }
+    .btn-green { color: #fff; background: #238636; border-color: rgba(240,246,252,.1); }
+    .btn-green:hover { background: #2ea043; }
+
+    /* ── App: wider than v1 to accommodate TOC sidebar ───────────── */
+    #app {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    /* ── Drop zone (centred within wider app) ─────────────────────── */
+    #drop-zone {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 88px);
+      text-align: center;
+      padding: 48px 32px;
+      border: 2px dashed #d0d7de;
+      border-radius: 12px;
+      background: white;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    #drop-zone.drag-over { border-color: #0969da; background: #ddf4ff; }
+    #drop-zone h2 { margin: 16px 0 8px; font-size: 20px; font-weight: 600; }
+    #drop-zone p { margin: 0 0 20px; color: #57606a; font-size: 14px; }
+
+    /* ── Content layout: main content + TOC sidebar ───────────────── */
+    /* Hidden by default; .visible is added by JS when a file loads. */
+    #content-layout { display: none; }
+    @media (min-width: 900px) {
+      #content-layout.visible {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+    }
+    @media (max-width: 899px) {
+      #content-layout.visible { display: block; }
+    }
+
+    #content-main { flex: 1; min-width: 0; }
+
+    /* ── Wiki page header ─────────────────────────────────────────── */
+    .wiki-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: #f6f8fa;
+      border: 1px solid #d0d7de;
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+      font-size: 12px;
+      color: #57606a;
+    }
+    .wiki-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .wiki-filename { font-weight: 600; color: #1f2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wiki-meta { color: #57606a; white-space: nowrap; flex-shrink: 0; }
+
+    /* ── Markdown body ────────────────────────────────────────────── */
+    .markdown-body {
+      border: 1px solid #d0d7de;
+      border-radius: 0 0 6px 6px;
+      padding: 32px 40px 32px 48px; /* extra left padding for heading anchors */
+      background: white;
+    }
+
+    /* Offset heading scroll targets below the sticky toolbar */
+    .markdown-body :is(h1,h2,h3,h4,h5,h6) {
+      position: relative;
+      scroll-margin-top: 70px;
+    }
+
+    /* ── Heading anchors ──────────────────────────────────────────── */
+    .heading-anchor {
+      position: absolute;
+      left: -28px;
+      top: 0;
+      bottom: 0;
+      width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #57606a;
+      opacity: 0;
+      text-decoration: none !important;
+      transition: opacity .1s;
+    }
+    .markdown-body :is(h1,h2,h3,h4,h5,h6):hover .heading-anchor { opacity: 1; }
+    .heading-anchor svg { fill: #57606a; flex-shrink: 0; }
+
+    /* ── Mermaid diagrams ─────────────────────────────────────────── */
+    .markdown-body .mermaid {
+      margin: 20px 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: white;
+    }
+    /* Remove the max-width mermaid injects so complex LR diagrams
+       render at natural width; container provides the scroll. */
+    .markdown-body .mermaid svg {
+      display: block;
+      margin: 0 auto;
+      max-width: none !important;
+    }
+
+    /* ── TOC sidebar ──────────────────────────────────────────────── */
+    /* Visibility is controlled entirely by CSS; never set inline display. */
+    #toc-sidebar { display: none; } /* hidden until content is ready */
+    @media (min-width: 900px) {
+      #toc-sidebar.toc-ready {
+        display: block;
+        width: 228px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 58px;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+      #toc-sidebar.toc-ready::-webkit-scrollbar { display: none; }
+    }
+
+    .toc-box {
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: white;
+      padding: 12px 0;
+    }
+    .toc-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1f2328;
+      padding: 0 12px 8px;
+      margin: 0;
+      border-bottom: 1px solid #d0d7de;
+    }
+    #toc-nav {
+      display: flex;
+      flex-direction: column;
+      padding: 8px 0 0;
+    }
+    #toc-nav a {
+      display: block;
+      font-size: 12px;
+      color: #57606a;
+      text-decoration: none;
+      padding: 3px 12px;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-left: 2px solid transparent;
+      transition: color .1s, background .1s;
+    }
+    #toc-nav a:hover { color: #0969da; background: #f6f8fa; }
+    #toc-nav a.toc-active {
+      color: #0969da;
+      font-weight: 600;
+      border-left-color: #0969da;
+      background: #f6f8fa;
+    }
+
+    /* ── Loading overlay ──────────────────────────────────────────── */
+    #loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      font-size: 14px;
+      color: #57606a;
+    }
+    #loading.visible { display: flex; }
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid #d0d7de;
+      border-top-color: #0969da;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Diagram zoom: expand button shown on hover ──────────────── */
+    .mermaid { position: relative; }
+    .diagram-expand {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(255,255,255,.9);
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      padding: 4px 6px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity .15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #57606a;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .diagram-expand:hover { background: #f6f8fa; border-color: #0969da; color: #0969da; }
+    .mermaid:hover .diagram-expand { opacity: 1; }
+
+    /* ── Diagram lightbox modal ───────────────────────────────────── */
+    #diagram-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    #diagram-modal.open { display: flex; }
+    #modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(1,4,9,.5);
+      cursor: pointer;
+    }
+    #modal-box {
+      position: relative;
+      z-index: 1;
+      background: white;
+      border-radius: 8px;
+      padding: 44px 24px 24px;
+      max-width: 95vw;
+      max-height: 92vh;
+      overflow: auto;
+      box-shadow: 0 16px 48px rgba(1,4,9,.4);
+    }
+    #modal-close {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #57606a;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #modal-close:hover { background: #f6f8fa; color: #1f2328; }
+    #modal-diagram svg { max-width: none !important; display: block; }
+
+    /* ── Print / PDF ──────────────────────────────────────────────── */
+    @page { margin: 18mm 15mm; }
+
+    @media print {
+      #toolbar, #drop-zone, .wiki-header, #toc-sidebar,
+      #loading, #diagram-modal, .diagram-expand { display: none !important; }
+      body { background: white; }
+      #app { padding: 0; max-width: 100%; }
+      #content-layout { display: block !important; }
+      .markdown-body {
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+      }
+      .heading-anchor { display: none !important; }
+      .markdown-body .mermaid {
+        overflow-x: visible !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .markdown-body .mermaid svg { max-width: 100% !important; height: auto !important; }
+      pre { page-break-inside: avoid; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Toolbar ───────────────────────────────────────────────────── -->
+<div id="toolbar">
+  <div class="toolbar-logo" style="margin-right:8px">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="#e6edf3" aria-hidden="true">
+      <path d="M14.85 3c.63 0 1.15.52 1.14 1.15v7.7c0 .63-.51 1.15-1.15 1.15H1.15C.52 13 0 12.48 0 11.84V4.15C0 3.52.52 3 1.15 3ZM9 11V5H7L5.5 7 4 5H2v6h2V8l1.5 2 1.5-2v3Zm2.99.5L14 8.5h-1.5V5h-2v3.5H9l2.99 3Z"/>
+    </svg>
+    Markdown Viewer
+  </div>
+  <span id="toolbar-filename"></span>
+
+  <label class="btn btn-secondary" for="file-input" title="Open a Markdown file">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8.75 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
+    </svg>
+    Open File
+  </label>
+
+  <button id="export-btn" class="btn btn-green" style="display:none" onclick="exportPDF()">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/>
+      <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.97a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/>
+    </svg>
+    Export PDF
+  </button>
+</div>
+
+<!-- ── Loading overlay ───────────────────────────────────────────── -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span>Rendering diagrams…</span>
+</div>
+
+<!-- ── App container ─────────────────────────────────────────────── -->
+<div id="app">
+
+  <!-- Drop zone (shown before any file is loaded) -->
+  <div id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <svg width="52" height="52" viewBox="0 0 16 16" fill="#8b949e" aria-hidden="true">
+      <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8.75 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
+    </svg>
+    <h2>Drop a Markdown file here</h2>
+    <p>Supports GitHub Flavored Markdown with Mermaid diagrams</p>
+    <button class="btn btn-green"
+            onclick="event.stopPropagation(); document.getElementById('file-input').click()">
+      Choose File
+    </button>
+  </div>
+
+  <!-- Two-column layout: content + TOC -->
+  <div id="content-layout">
+
+    <div id="content-main">
+      <div class="wiki-header">
+        <div class="wiki-header-left">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#57606a" aria-hidden="true">
+            <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/>
+          </svg>
+          <span class="wiki-filename" id="content-filename"></span>
+          <span class="wiki-meta" id="content-meta"></span>
+        </div>
+      </div>
+      <article class="markdown-body" id="rendered-content"></article>
+    </div>
+
+    <!-- TOC sidebar (hidden until content loads) -->
+    <aside id="toc-sidebar">
+      <div class="toc-box">
+        <p class="toc-title">On this page</p>
+        <nav id="toc-nav" aria-label="Table of contents"></nav>
+      </div>
+    </aside>
+
+  </div>
+
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept=".md,.markdown,.txt" style="display:none">
+
+<!-- ── Diagram zoom modal ────────────────────────────────────────── -->
+<div id="diagram-modal" role="dialog" aria-modal="true" aria-label="Diagram zoom">
+  <div id="modal-backdrop"></div>
+  <div id="modal-box">
+    <button id="modal-close" aria-label="Close">&#x2715;</button>
+    <div id="modal-diagram"></div>
+  </div>
+</div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<!--
+  UMD build — works when opened from disk (file://).
+  ES module imports are blocked by Chrome's null-origin CORS for file:// pages.
+-->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+  });
+
+  // ── marked: forward ```mermaid blocks to mermaid renderer ──────
+  marked.use({
+    gfm: true,
+    breaks: false,
+    renderer: {
+      code(token) {
+        // token may be an object (marked v9+) or positional args (older)
+        const lang = (typeof token === 'object') ? token.lang : arguments[1];
+        const text = (typeof token === 'object') ? token.text : token;
+        if (lang === 'mermaid') {
+          return `<div class="mermaid">${escapeHtml(text)}</div>\n`;
+        }
+        return false;
+      },
+    },
+  });
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ── Heading anchors (GitHub-style hover permalink icon) ─────────
+  const LINK_SVG = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+    <path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"/>
+  </svg>`;
+
+  function addHeadingAnchors(el) {
+    const seen = Object.create(null);
+    el.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+      let id = h.textContent
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-');
+      if (id in seen) { seen[id] += 1; id += '-' + seen[id]; }
+      else seen[id] = 0;
+
+      h.id = id;
+      const a = document.createElement('a');
+      a.className = 'heading-anchor';
+      a.href = '#' + id;
+      a.setAttribute('aria-label', 'Permalink: ' + h.textContent.trim());
+      a.innerHTML = LINK_SVG;
+      h.insertBefore(a, h.firstChild);
+    });
+  }
+
+  // ── TOC sidebar ────────────────────────────────────────────────
+  let tocObserver = null;
+
+  function buildTOC(contentEl) {
+    const sidebar = document.getElementById('toc-sidebar');
+    const nav = document.getElementById('toc-nav');
+    if (tocObserver) { tocObserver.disconnect(); tocObserver = null; }
+    sidebar.classList.remove('toc-ready');
+
+    const headings = [...contentEl.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+    if (headings.length < 2) return; // not enough headings to warrant a TOC
+
+    const minLevel = Math.min(...headings.map(h => +h.tagName[1]));
+
+    nav.innerHTML = headings.map(h => {
+      const indent = (+h.tagName[1] - minLevel) * 12;
+      const label = h.textContent.replace(/\n/g, ' ').trim();
+      return `<a href="#${h.id}" style="padding-left:${12 + indent}px" title="${label}">${label}</a>`;
+    }).join('');
+
+    sidebar.classList.add('toc-ready');
+
+    // Highlight the TOC entry whose section is nearest the top of the viewport
+    const links = [...nav.querySelectorAll('a')];
+    tocObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        links.forEach(a => a.classList.remove('toc-active'));
+        const active = nav.querySelector(`a[href="#${CSS.escape(entry.target.id)}"]`);
+        if (active) {
+          active.classList.add('toc-active');
+          // Scroll TOC to keep the active link visible
+          active.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    }, { rootMargin: '-60px 0px -75% 0px', threshold: 0 });
+
+    headings.forEach(h => tocObserver.observe(h));
+  }
+
+  // ── Diagram zoom / lightbox ────────────────────────────────────
+  // Octicon screen-full: 4-corner maximize icon
+  const EXPAND_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M1 1h5v1.5H2.5V5H1V1Zm9 0h5v4h-1.5V2.5H10V1ZM1 10h1.5v2.5H5V14H1v-4Zm12.5 2.5H11V14h4v-4h-1.5v2.5Z"/>
+  </svg>`;
+
+  function addDiagramZoom(contentEl) {
+    contentEl.querySelectorAll('.mermaid svg').forEach(svg => {
+      const wrap = svg.closest('.mermaid');
+      if (!wrap) return;
+
+      const btn = document.createElement('button');
+      btn.className = 'diagram-expand';
+      btn.setAttribute('aria-label', 'Expand diagram');
+      btn.innerHTML = EXPAND_SVG + 'Expand';
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openDiagramModal(svg);
+      });
+      wrap.appendChild(btn);
+
+      // Also allow clicking the diagram itself
+      svg.style.cursor = 'zoom-in';
+      svg.addEventListener('click', () => openDiagramModal(svg));
+    });
+  }
+
+  function openDiagramModal(svg) {
+    const diagramEl = document.getElementById('modal-diagram');
+    // Insert a copy of the SVG html so the original stays in place
+    diagramEl.innerHTML = svg.outerHTML;
+    document.getElementById('diagram-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDiagramModal() {
+    document.getElementById('diagram-modal').classList.remove('open');
+    document.getElementById('modal-diagram').innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('modal-backdrop').addEventListener('click', closeDiagramModal);
+  document.getElementById('modal-close').addEventListener('click', closeDiagramModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDiagramModal(); });
+
+  // ── Relative-time helper ───────────────────────────────────────
+  function relativeTime(ms) {
+    const s = Math.round((Date.now() - ms) / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const hr = Math.round(m / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const d = Math.round(hr / 24);
+    if (d < 30) return `${d}d ago`;
+    return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // ── Main render function ───────────────────────────────────────
+  async function renderFile(file) {
+    closeDiagramModal();
+    document.getElementById('loading').classList.add('visible');
+    try {
+      const text = await file.text();
+      const contentEl = document.getElementById('rendered-content');
+      contentEl.innerHTML = marked.parse(text);
+
+      // 1. Heading anchors
+      addHeadingAnchors(contentEl);
+
+      // 2. Syntax-highlight fenced code blocks
+      contentEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
+
+      // Show layout before mermaid renders so getBBox() returns real dimensions.
+      // The loading overlay (fixed, z-index 200) hides the flash of unstyled content.
+      document.getElementById('drop-zone').style.display = 'none';
+      document.getElementById('content-layout').classList.add('visible');
+
+      // 3. Render mermaid diagrams
+      await mermaid.run({
+        querySelector: '#rendered-content .mermaid',
+        suppressErrors: true,
+      });
+
+      // 4. Zoom buttons on each rendered diagram
+      addDiagramZoom(contentEl);
+
+      // 5. TOC
+      buildTOC(contentEl);
+      document.getElementById('export-btn').style.display = 'inline-flex';
+      document.getElementById('content-filename').textContent = file.name;
+      document.getElementById('content-meta').textContent =
+        file.lastModified ? `· modified ${relativeTime(file.lastModified)}` : '';
+      document.getElementById('toolbar-filename').textContent = file.name;
+      document.title = `${file.name} — Markdown Viewer`;
+
+      if (location.hash) {
+        const t = document.getElementById(location.hash.slice(1));
+        if (t) setTimeout(() => t.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    } finally {
+      document.getElementById('loading').classList.remove('visible');
+    }
+  }
+
+  // ── File input ─────────────────────────────────────────────────
+  document.getElementById('file-input').addEventListener('change', e => {
+    if (e.target.files[0]) { renderFile(e.target.files[0]); e.target.value = ''; }
+  });
+
+  // ── Drag and drop ──────────────────────────────────────────────
+  const dropZone = document.getElementById('drop-zone');
+  const pickMD = files => [...files].find(f => /\.(md|markdown|txt)$/i.test(f.name));
+
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = pickMD(e.dataTransfer.files || []);
+    if (f) renderFile(f);
+  });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  document.getElementById('content-layout').addEventListener('dragover', e => e.preventDefault());
+  document.getElementById('content-layout').addEventListener('drop', e => {
+    e.preventDefault();
+    const f = pickMD(e.dataTransfer.files || []);
+    if (f) renderFile(f);
+  });
+
+  // ── PDF export ─────────────────────────────────────────────────
+  window.exportPDF = () => window.print();
+</script>
+
+</body>
+</html>
