@@ -330,8 +330,7 @@
 
     @media print {
       #toolbar, #drop-zone, .wiki-header, #toc-sidebar,
-      #loading, #diagram-modal, .diagram-expand,
-      #diag-panel { display: none !important; }
+      #loading, #diagram-modal, .diagram-expand { display: none !important; }
       body { background: white; }
       #app { padding: 0; max-width: 100%; }
       #content-layout { display: block !important; }
@@ -432,28 +431,6 @@
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept=".md,.markdown,.txt" style="display:none">
 
-<!-- ── Diagnostics panel ─────────────────────────────────────────── -->
-<div id="diag-panel" style="
-    position:fixed; bottom:0; left:0; right:0; z-index:9999;
-    background:#1b1f24; color:#e6edf3; font-family:monospace; font-size:12px;
-    border-top:2px solid #388bfd; max-height:220px; display:flex; flex-direction:column;">
-  <div style="display:flex; align-items:center; padding:4px 10px; background:#24292f; flex-shrink:0; gap:12px;">
-    <strong style="color:#58a6ff">🔍 Diagnostics</strong>
-    <span id="diag-summary" style="color:#8b949e; font-size:11px"></span>
-    <button onclick="document.getElementById('diag-body').style.display=document.getElementById('diag-body').style.display==='none'?'block':'none'"
-            style="margin-left:auto; background:none; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:11px">
-      Toggle
-    </button>
-    <button onclick="document.getElementById('diag-panel').remove()"
-            style="background:none; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:2px 8px; cursor:pointer; font-size:11px">
-      Close ✕
-    </button>
-  </div>
-  <div id="diag-body" style="overflow-y:auto; padding:6px 10px; flex:1; line-height:1.6">
-    <div style="color:#8b949e">Waiting for page to load…</div>
-  </div>
-</div>
-
 <!-- ── Diagram zoom modal ────────────────────────────────────────── -->
 <div id="diagram-modal" role="dialog" aria-modal="true" aria-label="Diagram zoom">
   <div id="modal-backdrop"></div>
@@ -464,71 +441,23 @@
 </div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────── -->
-<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"
-        onerror="diagErr('marked.js failed to load from CDN')"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"
-        onerror="diagErr('highlight.js failed to load from CDN')"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <!--
   UMD build — works when opened from disk (file://).
   ES module imports are blocked by Chrome's null-origin CORS for file:// pages.
 -->
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"
-        onerror="diagErr('mermaid.min.js failed to load from CDN')"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 
 <script>
-  /* ── Diagnostic helpers (run before anything else) ──────────── */
-  let _diagCount = 0;
-  function diagErr(msg) {
-    // Called from onerror on script tags — panel may not exist yet
-    setTimeout(() => diag('❌ ' + msg, false), 0);
-  }
-  function diag(msg, ok) {
-    _diagCount++;
-    const body = document.getElementById('diag-body');
-    if (!body) { console.log('[diag]', msg); return; }
-    const ts = new Date().toLocaleTimeString('en', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit', fractionalSecondDigits: 3 });
-    const color = ok === false ? '#ff7b72' : ok === true ? '#3fb950' : '#e6edf3';
-    body.innerHTML += `<div style="color:${color}">[${ts}] ${msg}</div>`;
-    body.scrollTop = body.scrollHeight;
-    document.getElementById('diag-summary').textContent = `(${_diagCount} entries)`;
-  }
-
-  /* ── Library checks — run as soon as this script executes ────── */
-  (function checkLibs() {
-    diag('=== Library availability ===');
-    const ok_marked  = typeof marked   !== 'undefined';
-    const ok_hljs    = typeof hljs     !== 'undefined';
-    const ok_mermaid = typeof mermaid  !== 'undefined';
-    diag('marked.js : ' + (ok_marked  ? 'loaded ✓ (type=' + typeof marked  + ')' : 'MISSING ✗'), ok_marked);
-    diag('hljs      : ' + (ok_hljs    ? 'loaded ✓ (type=' + typeof hljs    + ')' : 'MISSING ✗'), ok_hljs);
-    diag('mermaid   : ' + (ok_mermaid ? 'loaded ✓ (type=' + typeof mermaid + ')' : 'MISSING ✗'), ok_mermaid);
-    if (ok_mermaid) {
-      diag('mermaid.version : ' + (mermaid.version || '(not exposed)'), true);
-      diag('mermaid.run     : ' + typeof mermaid.run, typeof mermaid.run === 'function');
-      diag('mermaid.initialize : ' + typeof mermaid.initialize, typeof mermaid.initialize === 'function');
-    }
-    if (ok_marked) {
-      diag('marked.parse : ' + typeof marked.parse, typeof marked.parse === 'function');
-      diag('marked.use   : ' + typeof marked.use,   typeof marked.use   === 'function');
-    }
-    diag('=== End library check ===');
-  })();
-
-  /* ── Mermaid init ────────────────────────────────────────────── */
-  try {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'default',
-      securityLevel: 'loose',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-    });
-    diag('mermaid.initialize() OK', true);
-  } catch(e) {
-    diag('mermaid.initialize() threw: ' + e, false);
-  }
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+  });
 
   // ── marked: forward ```mermaid blocks to mermaid renderer ──────
-  let _mermaidBlocksSeen = 0;
   marked.use({
     gfm: true,
     breaks: false,
@@ -538,14 +467,12 @@
         const lang = (typeof token === 'object') ? token.lang : arguments[1];
         const text = (typeof token === 'object') ? token.text : token;
         if (lang === 'mermaid') {
-          _mermaidBlocksSeen++;
           return `<div class="mermaid">${escapeHtml(text)}</div>\n`;
         }
         return false;
       },
     },
   });
-  diag('marked.use() configured with mermaid renderer', true);
 
   function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -679,42 +606,10 @@
   async function renderFile(file) {
     closeDiagramModal();
     document.getElementById('loading').classList.add('visible');
-    diag('=== renderFile: ' + file.name + ' (' + file.size + ' bytes) ===');
     try {
       const text = await file.text();
-      diag('File read OK (' + text.length + ' chars)');
-
       const contentEl = document.getElementById('rendered-content');
-
-      // Parse markdown
-      let html;
-      try {
-        html = marked.parse(text);
-        diag('marked.parse() OK — output length: ' + html.length + ' chars', true);
-      } catch(e) {
-        diag('marked.parse() threw: ' + e, false);
-        throw e;
-      }
-
-      // Count mermaid blocks in the HTML before inserting
-      const mermaidInHTML = (html.match(/class="mermaid"/g) || []).length;
-      diag('Mermaid renderer calls: ' + _mermaidBlocksSeen + ' | Divs in HTML: ' + mermaidInHTML, mermaidInHTML > 0);
-      _mermaidBlocksSeen = 0; // reset for next file
-      if (mermaidInHTML === 0) {
-        // Show a snippet of the HTML to see what happened to code blocks
-        const snippet = html.replace(/<[^>]+>/g, ' ').slice(0, 200).trim();
-        diag('HTML text preview: "' + snippet + '"');
-      }
-
-      contentEl.innerHTML = html;
-
-      // Verify DOM
-      const mermaidEls = contentEl.querySelectorAll('.mermaid');
-      diag('DOM .mermaid elements found: ' + mermaidEls.length, mermaidEls.length > 0);
-      if (mermaidEls.length > 0) {
-        const preview = mermaidEls[0].textContent.slice(0, 120).replace(/\s+/g, ' ').trim();
-        diag('First .mermaid textContent: "' + preview + '…"');
-      }
+      contentEl.innerHTML = marked.parse(text);
 
       // 1. Heading anchors
       addHeadingAnchors(contentEl);
@@ -722,39 +617,22 @@
       // 2. Syntax-highlight fenced code blocks
       contentEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
 
+      // Show layout before mermaid renders so getBBox() returns real dimensions.
+      // The loading overlay (fixed, z-index 200) hides the flash of unstyled content.
+      document.getElementById('drop-zone').style.display = 'none';
+      document.getElementById('content-layout').classList.add('visible');
+
       // 3. Render mermaid diagrams
-      diag('Calling mermaid.run()…');
-      try {
-        await mermaid.run({
-          querySelector: '#rendered-content .mermaid',
-          suppressErrors: false,
-        });
-        const svgs = contentEl.querySelectorAll('.mermaid svg');
-        diag('mermaid.run() completed — SVGs rendered: ' + svgs.length, svgs.length > 0);
-      } catch(e) {
-        diag('mermaid.run() threw: ' + e, false);
-        // Try falling back to per-element rendering
-        diag('Trying per-element fallback…');
-        for (const el of contentEl.querySelectorAll('.mermaid')) {
-          try {
-            const { svg } = await mermaid.render('mermaid-' + Math.random().toString(36).slice(2), el.textContent);
-            el.innerHTML = svg;
-            diag('Fallback render OK for one element', true);
-          } catch(e2) {
-            diag('Fallback render failed: ' + e2, false);
-          }
-        }
-      }
+      await mermaid.run({
+        querySelector: '#rendered-content .mermaid',
+        suppressErrors: true,
+      });
 
       // 4. Zoom buttons on each rendered diagram
       addDiagramZoom(contentEl);
 
       // 5. TOC
       buildTOC(contentEl);
-
-      // Show content, update UI chrome
-      document.getElementById('drop-zone').style.display = 'none';
-      document.getElementById('content-layout').classList.add('visible');
       document.getElementById('export-btn').style.display = 'inline-flex';
       document.getElementById('content-filename').textContent = file.name;
       document.getElementById('content-meta').textContent =
