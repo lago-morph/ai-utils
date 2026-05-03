@@ -443,9 +443,13 @@
 <!-- ── Scripts ──────────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script type="module">
-  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-
+<!--
+  Use the UMD (non-module) mermaid build so the file works when opened
+  directly from disk (file://).  ES module imports are blocked by Chrome's
+  null-origin CORS policy for file:// pages; regular <script src> tags are not.
+-->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
   // ── Mermaid ────────────────────────────────────────────────────
   mermaid.initialize({
     startOnLoad: false,
