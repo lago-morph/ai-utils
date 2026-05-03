@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Markdown Viewer</title>
+  <!-- highlight.js (GitHub theme) — syntax-highlights code blocks -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  <!-- GitHub-style markdown body CSS -->
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
   <style>
@@ -17,7 +21,7 @@
       color: #1f2328;
     }
 
-    /* ── Toolbar ────────────────────────────────────────────── */
+    /* ── Toolbar ────────────────────────────────────────────────── */
     #toolbar {
       position: sticky;
       top: 0;
@@ -79,14 +83,14 @@
     }
     .btn-green:hover { background: #2ea043; }
 
-    /* ── Main layout ───────────────────────────────────────── */
+    /* ── Main layout ─────────────────────────────────────────────── */
     #app {
       max-width: 1012px;
       margin: 0 auto;
       padding: 24px 16px;
     }
 
-    /* ── Drop zone ─────────────────────────────────────────── */
+    /* ── Drop zone ───────────────────────────────────────────────── */
     #drop-zone {
       display: flex;
       flex-direction: column;
@@ -116,52 +120,92 @@
       font-size: 14px;
     }
 
-    /* ── Content panel ─────────────────────────────────────── */
+    /* ── Content panel ───────────────────────────────────────────── */
     #content-panel { display: none; }
 
-    .file-header {
+    /* Wiki-style page header — mirrors GitHub's "edited N days ago" bar */
+    .wiki-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
+      justify-content: space-between;
+      padding: 10px 16px;
       background: #f6f8fa;
       border: 1px solid #d0d7de;
       border-bottom: none;
       border-radius: 6px 6px 0 0;
       font-size: 12px;
       color: #57606a;
+      gap: 8px;
     }
-    .file-header span { font-weight: 600; color: #0969da; }
+    .wiki-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .wiki-header-left svg { flex-shrink: 0; }
+    .wiki-filename {
+      font-weight: 600;
+      color: #1f2328;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .wiki-meta { color: #57606a; white-space: nowrap; }
 
     /* github-markdown-css wrapper */
     .markdown-body {
       border: 1px solid #d0d7de;
       border-radius: 0 0 6px 6px;
-      padding: 32px 40px;
+      /* Left padding widened so heading anchors have room to appear */
+      padding: 32px 40px 32px 48px;
       background: white;
     }
 
-    /* Centre mermaid diagrams like GitHub does */
+    /* ── Heading anchors (GitHub-style) ──────────────────────────── */
+    .markdown-body :is(h1, h2, h3, h4, h5, h6) {
+      position: relative;
+    }
+    .heading-anchor {
+      position: absolute;
+      /* Sit just to the left of the heading text */
+      left: -28px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #57606a;
+      opacity: 0;
+      text-decoration: none !important;
+      transition: opacity .1s;
+    }
+    .markdown-body :is(h1,h2,h3,h4,h5,h6):hover .heading-anchor {
+      opacity: 1;
+    }
+    .heading-anchor svg { fill: #57606a; }
+
+    /* ── Mermaid diagrams ────────────────────────────────────────── */
     .markdown-body .mermaid {
-      text-align: center;
       margin: 20px 0;
-      overflow-x: auto;
+      overflow-x: auto;       /* wide diagrams scroll; don't shrink */
+      overflow-y: hidden;
+      /* Keep white bg so scrollbar chrome doesn't look odd */
+      background: white;
     }
-    .markdown-body .mermaid svg { max-width: 100%; }
-
-    /* Mermaid render error */
-    .mermaid-error {
-      padding: 12px 16px;
-      background: #fff8c5;
-      border: 1px solid #d4a72c;
-      border-radius: 6px;
-      font-size: 13px;
-      color: #633c01;
-      white-space: pre-wrap;
-      font-family: monospace;
+    /*
+     * Remove the max-width:100% that mermaid injects as an inline style.
+     * Without this the diagram shrinks to fit the column and becomes
+     * unreadable for complex LR flowcharts.
+     */
+    .markdown-body .mermaid svg {
+      display: block;
+      margin: 0 auto;         /* centre narrow diagrams */
+      max-width: none !important;
     }
 
-    /* ── Loading overlay ───────────────────────────────────── */
+    /* ── Loading overlay ─────────────────────────────────────────── */
     #loading {
       display: none;
       position: fixed;
@@ -187,28 +231,47 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Print / PDF ───────────────────────────────────────── */
+    /* ── Print / PDF ─────────────────────────────────────────────── */
+    @page { margin: 18mm 15mm; }
+
     @media print {
-      #toolbar, #drop-zone, .file-header { display: none !important; }
+      #toolbar, #drop-zone, .wiki-header,
+      #loading { display: none !important; }
+
       body { background: white; }
       #app { padding: 0; max-width: 100%; }
       #content-panel { display: block !important; }
+
       .markdown-body {
         border: none !important;
         border-radius: 0 !important;
         padding: 0 !important;
       }
-      .markdown-body .mermaid { page-break-inside: avoid; }
-      .mermaid svg { max-width: 100% !important; }
+
+      /* Anchor icons clutter PDFs */
+      .heading-anchor { display: none !important; }
+
+      /* Scale wide diagrams down to page width; avoid splitting them */
+      .markdown-body .mermaid {
+        overflow-x: visible !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .markdown-body .mermaid svg {
+        max-width: 100% !important;
+        height: auto !important;
+      }
+
+      /* Keep code blocks from splitting across pages */
+      pre { page-break-inside: avoid; break-inside: avoid; }
     }
   </style>
 </head>
 <body>
 
-<!-- ── Toolbar ──────────────────────────────────────────────── -->
+<!-- ── Toolbar ───────────────────────────────────────────────────── -->
 <div id="toolbar">
   <div class="toolbar-logo" style="margin-right:8px">
-    <!-- Octicon: markdown -->
     <svg width="20" height="20" viewBox="0 0 16 16" fill="#e6edf3" aria-hidden="true">
       <path d="M14.85 3c.63 0 1.15.52 1.14 1.15v7.7c0 .63-.51 1.15-1.15 1.15H1.15C.52 13 0 12.48 0 11.84V4.15C0 3.52.52 3 1.15 3ZM9 11V5H7L5.5 7 4 5H2v6h2V8l1.5 2 1.5-2v3Zm2.99.5L14 8.5h-1.5V5h-2v3.5H9l2.99 3Z"/>
     </svg>
@@ -217,7 +280,6 @@
   <span id="toolbar-filename"></span>
 
   <label class="btn btn-secondary" for="file-input" title="Open a Markdown file">
-    <!-- Octicon: file -->
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8.75 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
     </svg>
@@ -225,7 +287,6 @@
   </label>
 
   <button id="export-btn" class="btn btn-green" style="display:none" onclick="exportPDF()">
-    <!-- Octicon: download -->
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/>
       <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.97a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/>
@@ -234,35 +295,39 @@
   </button>
 </div>
 
-<!-- ── Loading overlay ──────────────────────────────────────── -->
+<!-- ── Loading overlay ───────────────────────────────────────────── -->
 <div id="loading">
   <div class="spinner"></div>
   <span>Rendering diagrams…</span>
 </div>
 
-<!-- ── App container ────────────────────────────────────────── -->
+<!-- ── App container ─────────────────────────────────────────────── -->
 <div id="app">
 
-  <!-- Drop zone (visible before any file is loaded) -->
+  <!-- Drop zone -->
   <div id="drop-zone" onclick="document.getElementById('file-input').click()">
     <svg width="52" height="52" viewBox="0 0 16 16" fill="#8b949e" aria-hidden="true">
       <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8.75 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
     </svg>
     <h2>Drop a Markdown file here</h2>
     <p>Supports GitHub Flavored Markdown with Mermaid diagrams</p>
-    <button class="btn btn-green" onclick="event.stopPropagation(); document.getElementById('file-input').click()">
+    <button class="btn btn-green"
+            onclick="event.stopPropagation(); document.getElementById('file-input').click()">
       Choose File
     </button>
   </div>
 
-  <!-- Rendered content (hidden until file loaded) -->
+  <!-- Rendered content -->
   <div id="content-panel">
-    <div class="file-header">
-      <!-- Octicon: file -->
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="#57606a" aria-hidden="true">
-        <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8.75 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
-      </svg>
-      <span id="content-filename"></span>
+    <div class="wiki-header">
+      <div class="wiki-header-left">
+        <!-- Octicon: book -->
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="#57606a" aria-hidden="true">
+          <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/>
+        </svg>
+        <span class="wiki-filename" id="content-filename"></span>
+        <span class="wiki-meta" id="content-meta"></span>
+      </div>
     </div>
     <article class="markdown-body" id="rendered-content"></article>
   </div>
@@ -272,43 +337,79 @@
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept=".md,.markdown,.txt" style="display:none">
 
-<!-- ── Scripts ───────────────────────────────────────────────── -->
+<!-- ── Scripts ──────────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
 
-  // ── Mermaid setup ──────────────────────────────────────────
+  // ── Mermaid ────────────────────────────────────────────────────
   mermaid.initialize({
     startOnLoad: false,
     theme: 'default',
-    securityLevel: 'loose', // needed to render links inside diagrams
+    securityLevel: 'loose',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
   });
 
-  // ── marked setup: intercept ```mermaid blocks ──────────────
+  // ── marked: intercept ```mermaid blocks ────────────────────────
   marked.use({
+    gfm: true,
+    breaks: false,
     renderer: {
       code(token) {
         if (token.lang === 'mermaid') {
-          // Wrap in a container; mermaid.run will replace the inner pre
           return `<div class="mermaid">${escapeHtml(token.text)}</div>\n`;
         }
-        return false; // fall through to default renderer
+        return false;
       },
     },
-    // Enable GFM (tables, strikethrough, task lists, etc.)
-    gfm: true,
-    breaks: false,
   });
 
   function escapeHtml(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // ── File rendering ─────────────────────────────────────────
+  // ── Heading anchors ────────────────────────────────────────────
+  const LINK_ICON = `<svg class="octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+    <path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"/>
+  </svg>`;
+
+  function addHeadingAnchors(el) {
+    const seen = Object.create(null);
+    el.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+      let slug = h.textContent
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-');
+      // Deduplicate: GitHub appends -1, -2 for repeated headings
+      if (slug in seen) { seen[slug] += 1; slug += '-' + seen[slug]; }
+      else seen[slug] = 0;
+
+      h.id = slug;
+      const a = document.createElement('a');
+      a.className = 'heading-anchor';
+      a.href = '#' + slug;
+      a.setAttribute('aria-label', 'Permalink: ' + h.textContent);
+      a.innerHTML = LINK_ICON;
+      h.insertBefore(a, h.firstChild);
+    });
+  }
+
+  // ── Relative-time helper ───────────────────────────────────────
+  function relativeTime(ms) {
+    const secs = Math.round((Date.now() - ms) / 1000);
+    if (secs < 60) return 'just now';
+    const mins = Math.round(secs / 60);
+    if (mins < 60) return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+    const days = Math.round(hrs / 24);
+    if (days < 30) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // ── File rendering ─────────────────────────────────────────────
   async function renderFile(file) {
     const loading = document.getElementById('loading');
     loading.classList.add('visible');
@@ -320,42 +421,51 @@
       const contentEl = document.getElementById('rendered-content');
       contentEl.innerHTML = html;
 
-      // Reveal content panel, hide drop zone
-      document.getElementById('drop-zone').style.display = 'none';
-      document.getElementById('content-panel').style.display = 'block';
-      document.getElementById('export-btn').style.display = 'inline-flex';
+      // 1. Heading anchors
+      addHeadingAnchors(contentEl);
 
-      const name = file.name;
-      document.getElementById('content-filename').textContent = name;
-      document.getElementById('toolbar-filename').textContent = name;
-      document.title = `${name} — Markdown Viewer`;
+      // 2. Syntax-highlight code blocks (skips mermaid divs — they're not <pre><code>)
+      contentEl.querySelectorAll('pre code').forEach(block => {
+        hljs.highlightElement(block);
+      });
 
-      // Render mermaid diagrams
-      // mermaid.run expects elements whose textContent is the diagram source
+      // 3. Render mermaid diagrams
       await mermaid.run({
         querySelector: '#rendered-content .mermaid',
         suppressErrors: false,
-      }).catch(err => {
-        console.warn('Mermaid run error:', err);
-      });
+      }).catch(err => console.warn('Mermaid run error:', err));
 
+      // UI updates
+      document.getElementById('drop-zone').style.display = 'none';
+      document.getElementById('content-panel').style.display = 'block';
+      document.getElementById('export-btn').style.display = 'inline-flex';
+      document.getElementById('content-filename').textContent = file.name;
+      document.getElementById('content-meta').textContent =
+        file.lastModified ? `· modified ${relativeTime(file.lastModified)}` : '';
+      document.getElementById('toolbar-filename').textContent = file.name;
+      document.title = `${file.name} — Markdown Viewer`;
+
+      // Smooth-scroll to anchor if URL has a hash
+      if (location.hash) {
+        const target = document.getElementById(location.hash.slice(1));
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+      }
     } finally {
       loading.classList.remove('visible');
     }
   }
 
-  // ── File input ─────────────────────────────────────────────
+  // ── File input ─────────────────────────────────────────────────
   document.getElementById('file-input').addEventListener('change', e => {
     if (e.target.files[0]) {
       renderFile(e.target.files[0]);
-      e.target.value = ''; // allow re-selecting the same file
+      e.target.value = '';
     }
   });
 
-  // ── Drag and drop ──────────────────────────────────────────
+  // ── Drag and drop ──────────────────────────────────────────────
   const dropZone = document.getElementById('drop-zone');
 
-  // Prevent browser from navigating to dropped file
   document.addEventListener('dragover', e => e.preventDefault());
   document.addEventListener('drop', e => {
     e.preventDefault();
@@ -366,15 +476,10 @@
     if (file) renderFile(file);
   });
 
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-  });
-  dropZone.addEventListener('dragleave', () => {
-    dropZone.classList.remove('drag-over');
-  });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 
-  // Allow dropping onto content area too (re-open different file)
+  // Drop onto already-loaded content replaces it
   document.getElementById('content-panel').addEventListener('dragover', e => e.preventDefault());
   document.getElementById('content-panel').addEventListener('drop', e => {
     e.preventDefault();
@@ -384,10 +489,8 @@
     if (file) renderFile(file);
   });
 
-  // ── PDF export ─────────────────────────────────────────────
-  window.exportPDF = function () {
-    window.print();
-  };
+  // ── PDF export ─────────────────────────────────────────────────
+  window.exportPDF = () => window.print();
 </script>
 
 </body>
