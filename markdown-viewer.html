@@ -4,10 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Markdown Viewer</title>
-  <!-- highlight.js (GitHub theme) — syntax-highlights code blocks -->
   <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-  <!-- GitHub-style markdown body CSS -->
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.min.css">
   <style>
@@ -21,7 +19,7 @@
       color: #1f2328;
     }
 
-    /* ── Toolbar ────────────────────────────────────────────────── */
+    /* ── Toolbar ─────────────────────────────────────────────────── */
     #toolbar {
       position: sticky;
       top: 0;
@@ -33,7 +31,6 @@
       background: #24292f;
       border-bottom: 1px solid #30363d;
     }
-
     .toolbar-logo {
       display: flex;
       align-items: center;
@@ -42,17 +39,15 @@
       font-size: 14px;
       font-weight: 600;
     }
-
     #toolbar-filename {
       font-size: 12px;
       color: #8b949e;
-      max-width: 340px;
+      max-width: 300px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       margin-right: auto;
     }
-
     .btn {
       display: inline-flex;
       align-items: center;
@@ -68,30 +63,22 @@
       font-family: inherit;
       text-decoration: none;
     }
-
-    .btn-secondary {
-      color: #e6edf3;
-      background: #21262d;
-      border-color: #30363d;
-    }
+    .btn-secondary { color: #e6edf3; background: #21262d; border-color: #30363d; }
     .btn-secondary:hover { background: #30363d; }
-
-    .btn-green {
-      color: #fff;
-      background: #238636;
-      border-color: rgba(240,246,252,.1);
-    }
+    .btn-green { color: #fff; background: #238636; border-color: rgba(240,246,252,.1); }
     .btn-green:hover { background: #2ea043; }
 
-    /* ── Main layout ─────────────────────────────────────────────── */
+    /* ── App: wider than v1 to accommodate TOC sidebar ───────────── */
     #app {
-      max-width: 1012px;
+      max-width: 1280px;
       margin: 0 auto;
       padding: 24px 16px;
     }
 
-    /* ── Drop zone ───────────────────────────────────────────────── */
+    /* ── Drop zone (centred within wider app) ─────────────────────── */
     #drop-zone {
+      max-width: 760px;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -105,25 +92,27 @@
       cursor: pointer;
       transition: border-color .15s, background .15s;
     }
-    #drop-zone.drag-over {
-      border-color: #0969da;
-      background: #ddf4ff;
+    #drop-zone.drag-over { border-color: #0969da; background: #ddf4ff; }
+    #drop-zone h2 { margin: 16px 0 8px; font-size: 20px; font-weight: 600; }
+    #drop-zone p { margin: 0 0 20px; color: #57606a; font-size: 14px; }
+
+    /* ── Content layout: main content + TOC sidebar ───────────────── */
+    /* Hidden by default; .visible is added by JS when a file loads. */
+    #content-layout { display: none; }
+    @media (min-width: 900px) {
+      #content-layout.visible {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
     }
-    #drop-zone h2 {
-      margin: 16px 0 8px;
-      font-size: 20px;
-      font-weight: 600;
-    }
-    #drop-zone p {
-      margin: 0 0 20px;
-      color: #57606a;
-      font-size: 14px;
+    @media (max-width: 899px) {
+      #content-layout.visible { display: block; }
     }
 
-    /* ── Content panel ───────────────────────────────────────────── */
-    #content-panel { display: none; }
+    #content-main { flex: 1; min-width: 0; }
 
-    /* Wiki-style page header — mirrors GitHub's "edited N days ago" bar */
+    /* ── Wiki page header ─────────────────────────────────────────── */
     .wiki-header {
       display: flex;
       align-items: center;
@@ -135,43 +124,31 @@
       border-radius: 6px 6px 0 0;
       font-size: 12px;
       color: #57606a;
-      gap: 8px;
     }
-    .wiki-header-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    .wiki-header-left svg { flex-shrink: 0; }
-    .wiki-filename {
-      font-weight: 600;
-      color: #1f2328;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .wiki-meta { color: #57606a; white-space: nowrap; }
+    .wiki-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .wiki-filename { font-weight: 600; color: #1f2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wiki-meta { color: #57606a; white-space: nowrap; flex-shrink: 0; }
 
-    /* github-markdown-css wrapper */
+    /* ── Markdown body ────────────────────────────────────────────── */
     .markdown-body {
       border: 1px solid #d0d7de;
       border-radius: 0 0 6px 6px;
-      /* Left padding widened so heading anchors have room to appear */
-      padding: 32px 40px 32px 48px;
+      padding: 32px 40px 32px 48px; /* extra left padding for heading anchors */
       background: white;
     }
 
-    /* ── Heading anchors (GitHub-style) ──────────────────────────── */
-    .markdown-body :is(h1, h2, h3, h4, h5, h6) {
+    /* Offset heading scroll targets below the sticky toolbar */
+    .markdown-body :is(h1,h2,h3,h4,h5,h6) {
       position: relative;
+      scroll-margin-top: 70px;
     }
+
+    /* ── Heading anchors ──────────────────────────────────────────── */
     .heading-anchor {
       position: absolute;
-      /* Sit just to the left of the heading text */
       left: -28px;
-      top: 50%;
-      transform: translateY(-50%);
+      top: 0;
+      bottom: 0;
       width: 24px;
       display: flex;
       align-items: center;
@@ -181,31 +158,82 @@
       text-decoration: none !important;
       transition: opacity .1s;
     }
-    .markdown-body :is(h1,h2,h3,h4,h5,h6):hover .heading-anchor {
-      opacity: 1;
-    }
-    .heading-anchor svg { fill: #57606a; }
+    .markdown-body :is(h1,h2,h3,h4,h5,h6):hover .heading-anchor { opacity: 1; }
+    .heading-anchor svg { fill: #57606a; flex-shrink: 0; }
 
-    /* ── Mermaid diagrams ────────────────────────────────────────── */
+    /* ── Mermaid diagrams ─────────────────────────────────────────── */
     .markdown-body .mermaid {
       margin: 20px 0;
-      overflow-x: auto;       /* wide diagrams scroll; don't shrink */
+      overflow-x: auto;
       overflow-y: hidden;
-      /* Keep white bg so scrollbar chrome doesn't look odd */
       background: white;
     }
-    /*
-     * Remove the max-width:100% that mermaid injects as an inline style.
-     * Without this the diagram shrinks to fit the column and becomes
-     * unreadable for complex LR flowcharts.
-     */
+    /* Remove the max-width mermaid injects so complex LR diagrams
+       render at natural width; container provides the scroll. */
     .markdown-body .mermaid svg {
       display: block;
-      margin: 0 auto;         /* centre narrow diagrams */
+      margin: 0 auto;
       max-width: none !important;
     }
 
-    /* ── Loading overlay ─────────────────────────────────────────── */
+    /* ── TOC sidebar ──────────────────────────────────────────────── */
+    /* Visibility is controlled entirely by CSS; never set inline display. */
+    #toc-sidebar { display: none; } /* hidden until content is ready */
+    @media (min-width: 900px) {
+      #toc-sidebar.toc-ready {
+        display: block;
+        width: 228px;
+        flex-shrink: 0;
+        position: sticky;
+        top: 58px;
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+      #toc-sidebar.toc-ready::-webkit-scrollbar { display: none; }
+    }
+
+    .toc-box {
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: white;
+      padding: 12px 0;
+    }
+    .toc-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1f2328;
+      padding: 0 12px 8px;
+      margin: 0;
+      border-bottom: 1px solid #d0d7de;
+    }
+    #toc-nav {
+      display: flex;
+      flex-direction: column;
+      padding: 8px 0 0;
+    }
+    #toc-nav a {
+      display: block;
+      font-size: 12px;
+      color: #57606a;
+      text-decoration: none;
+      padding: 3px 12px;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-left: 2px solid transparent;
+      transition: color .1s, background .1s;
+    }
+    #toc-nav a:hover { color: #0969da; background: #f6f8fa; }
+    #toc-nav a.toc-active {
+      color: #0969da;
+      font-weight: 600;
+      border-left-color: #0969da;
+      background: #f6f8fa;
+    }
+
+    /* ── Loading overlay ──────────────────────────────────────────── */
     #loading {
       display: none;
       position: fixed;
@@ -220,7 +248,6 @@
       color: #57606a;
     }
     #loading.visible { display: flex; }
-
     .spinner {
       width: 28px;
       height: 28px;
@@ -231,38 +258,27 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Print / PDF ─────────────────────────────────────────────── */
+    /* ── Print / PDF ──────────────────────────────────────────────── */
     @page { margin: 18mm 15mm; }
 
     @media print {
       #toolbar, #drop-zone, .wiki-header,
-      #loading { display: none !important; }
-
+      #toc-sidebar, #loading { display: none !important; }
       body { background: white; }
       #app { padding: 0; max-width: 100%; }
-      #content-panel { display: block !important; }
-
+      #content-layout { display: block !important; }
       .markdown-body {
         border: none !important;
         border-radius: 0 !important;
         padding: 0 !important;
       }
-
-      /* Anchor icons clutter PDFs */
       .heading-anchor { display: none !important; }
-
-      /* Scale wide diagrams down to page width; avoid splitting them */
       .markdown-body .mermaid {
         overflow-x: visible !important;
         page-break-inside: avoid;
         break-inside: avoid;
       }
-      .markdown-body .mermaid svg {
-        max-width: 100% !important;
-        height: auto !important;
-      }
-
-      /* Keep code blocks from splitting across pages */
+      .markdown-body .mermaid svg { max-width: 100% !important; height: auto !important; }
       pre { page-break-inside: avoid; break-inside: avoid; }
     }
   </style>
@@ -304,7 +320,7 @@
 <!-- ── App container ─────────────────────────────────────────────── -->
 <div id="app">
 
-  <!-- Drop zone -->
+  <!-- Drop zone (shown before any file is loaded) -->
   <div id="drop-zone" onclick="document.getElementById('file-input').click()">
     <svg width="52" height="52" viewBox="0 0 16 16" fill="#8b949e" aria-hidden="true">
       <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 8.75 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"/>
@@ -317,19 +333,30 @@
     </button>
   </div>
 
-  <!-- Rendered content -->
-  <div id="content-panel">
-    <div class="wiki-header">
-      <div class="wiki-header-left">
-        <!-- Octicon: book -->
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="#57606a" aria-hidden="true">
-          <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/>
-        </svg>
-        <span class="wiki-filename" id="content-filename"></span>
-        <span class="wiki-meta" id="content-meta"></span>
+  <!-- Two-column layout: content + TOC -->
+  <div id="content-layout">
+
+    <div id="content-main">
+      <div class="wiki-header">
+        <div class="wiki-header-left">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="#57606a" aria-hidden="true">
+            <path d="M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"/>
+          </svg>
+          <span class="wiki-filename" id="content-filename"></span>
+          <span class="wiki-meta" id="content-meta"></span>
+        </div>
       </div>
+      <article class="markdown-body" id="rendered-content"></article>
     </div>
-    <article class="markdown-body" id="rendered-content"></article>
+
+    <!-- TOC sidebar (hidden until content loads) -->
+    <aside id="toc-sidebar">
+      <div class="toc-box">
+        <p class="toc-title">On this page</p>
+        <nav id="toc-nav" aria-label="Table of contents"></nav>
+      </div>
+    </aside>
+
   </div>
 
 </div>
@@ -351,7 +378,7 @@
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
   });
 
-  // ── marked: intercept ```mermaid blocks ────────────────────────
+  // ── marked: forward ```mermaid blocks to mermaid renderer ──────
   marked.use({
     gfm: true,
     breaks: false,
@@ -369,75 +396,111 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // ── Heading anchors ────────────────────────────────────────────
-  const LINK_ICON = `<svg class="octicon-link" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+  // ── Heading anchors (GitHub-style hover permalink icon) ─────────
+  const LINK_SVG = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
     <path d="m7.775 3.275 1.25-1.25a3.5 3.5 0 1 1 4.95 4.95l-2.5 2.5a3.5 3.5 0 0 1-4.95 0 .751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018 1.998 1.998 0 0 0 2.83 0l2.5-2.5a2.002 2.002 0 0 0-2.83-2.83l-1.25 1.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042Zm-4.69 9.64a1.998 1.998 0 0 0 2.83 0l1.25-1.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042l-1.25 1.25a3.5 3.5 0 1 1-4.95-4.95l2.5-2.5a3.5 3.5 0 0 1 4.95 0 .751.751 0 0 1-.018 1.042.751.751 0 0 1-1.042.018 1.998 1.998 0 0 0-2.83 0l-2.5 2.5a1.998 1.998 0 0 0 0 2.83Z"/>
   </svg>`;
 
   function addHeadingAnchors(el) {
     const seen = Object.create(null);
     el.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
-      let slug = h.textContent
+      let id = h.textContent
         .toLowerCase()
         .replace(/[^\w\s-]/g, '')
         .trim()
         .replace(/\s+/g, '-');
-      // Deduplicate: GitHub appends -1, -2 for repeated headings
-      if (slug in seen) { seen[slug] += 1; slug += '-' + seen[slug]; }
-      else seen[slug] = 0;
+      if (id in seen) { seen[id] += 1; id += '-' + seen[id]; }
+      else seen[id] = 0;
 
-      h.id = slug;
+      h.id = id;
       const a = document.createElement('a');
       a.className = 'heading-anchor';
-      a.href = '#' + slug;
-      a.setAttribute('aria-label', 'Permalink: ' + h.textContent);
-      a.innerHTML = LINK_ICON;
+      a.href = '#' + id;
+      a.setAttribute('aria-label', 'Permalink: ' + h.textContent.trim());
+      a.innerHTML = LINK_SVG;
       h.insertBefore(a, h.firstChild);
     });
   }
 
+  // ── TOC sidebar ────────────────────────────────────────────────
+  let tocObserver = null;
+
+  function buildTOC(contentEl) {
+    const sidebar = document.getElementById('toc-sidebar');
+    const nav = document.getElementById('toc-nav');
+    if (tocObserver) { tocObserver.disconnect(); tocObserver = null; }
+    sidebar.classList.remove('toc-ready');
+
+    const headings = [...contentEl.querySelectorAll('h1,h2,h3,h4,h5,h6')];
+    if (headings.length < 2) return; // not enough headings to warrant a TOC
+
+    const minLevel = Math.min(...headings.map(h => +h.tagName[1]));
+
+    nav.innerHTML = headings.map(h => {
+      const indent = (+h.tagName[1] - minLevel) * 12;
+      const label = h.textContent.replace(/\n/g, ' ').trim();
+      return `<a href="#${h.id}" style="padding-left:${12 + indent}px" title="${label}">${label}</a>`;
+    }).join('');
+
+    sidebar.classList.add('toc-ready');
+
+    // Highlight the TOC entry whose section is nearest the top of the viewport
+    const links = [...nav.querySelectorAll('a')];
+    tocObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        links.forEach(a => a.classList.remove('toc-active'));
+        const active = nav.querySelector(`a[href="#${CSS.escape(entry.target.id)}"]`);
+        if (active) {
+          active.classList.add('toc-active');
+          // Scroll TOC to keep the active link visible
+          active.scrollIntoView({ block: 'nearest' });
+        }
+      });
+    }, { rootMargin: '-60px 0px -75% 0px', threshold: 0 });
+
+    headings.forEach(h => tocObserver.observe(h));
+  }
+
   // ── Relative-time helper ───────────────────────────────────────
   function relativeTime(ms) {
-    const secs = Math.round((Date.now() - ms) / 1000);
-    if (secs < 60) return 'just now';
-    const mins = Math.round(secs / 60);
-    if (mins < 60) return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
-    const hrs = Math.round(mins / 60);
-    if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
-    const days = Math.round(hrs / 24);
-    if (days < 30) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    const s = Math.round((Date.now() - ms) / 1000);
+    if (s < 60) return 'just now';
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const hr = Math.round(m / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const d = Math.round(hr / 24);
+    if (d < 30) return `${d}d ago`;
     return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
-  // ── File rendering ─────────────────────────────────────────────
+  // ── Main render function ───────────────────────────────────────
   async function renderFile(file) {
-    const loading = document.getElementById('loading');
-    loading.classList.add('visible');
-
+    document.getElementById('loading').classList.add('visible');
     try {
       const text = await file.text();
-      const html = marked.parse(text);
-
       const contentEl = document.getElementById('rendered-content');
-      contentEl.innerHTML = html;
+      contentEl.innerHTML = marked.parse(text);
 
       // 1. Heading anchors
       addHeadingAnchors(contentEl);
 
-      // 2. Syntax-highlight code blocks (skips mermaid divs — they're not <pre><code>)
-      contentEl.querySelectorAll('pre code').forEach(block => {
-        hljs.highlightElement(block);
-      });
+      // 2. Syntax-highlight fenced code blocks (mermaid divs are not <pre><code>)
+      contentEl.querySelectorAll('pre code').forEach(b => hljs.highlightElement(b));
 
       // 3. Render mermaid diagrams
       await mermaid.run({
         querySelector: '#rendered-content .mermaid',
         suppressErrors: false,
-      }).catch(err => console.warn('Mermaid run error:', err));
+      }).catch(err => console.warn('Mermaid:', err));
 
-      // UI updates
+      // 4. TOC
+      buildTOC(contentEl);
+
+      // Show content, update UI chrome
       document.getElementById('drop-zone').style.display = 'none';
-      document.getElementById('content-panel').style.display = 'block';
+      document.getElementById('content-layout').classList.add('visible');
       document.getElementById('export-btn').style.display = 'inline-flex';
       document.getElementById('content-filename').textContent = file.name;
       document.getElementById('content-meta').textContent =
@@ -445,48 +508,39 @@
       document.getElementById('toolbar-filename').textContent = file.name;
       document.title = `${file.name} — Markdown Viewer`;
 
-      // Smooth-scroll to anchor if URL has a hash
       if (location.hash) {
-        const target = document.getElementById(location.hash.slice(1));
-        if (target) target.scrollIntoView({ behavior: 'smooth' });
+        const t = document.getElementById(location.hash.slice(1));
+        if (t) setTimeout(() => t.scrollIntoView({ behavior: 'smooth' }), 100);
       }
     } finally {
-      loading.classList.remove('visible');
+      document.getElementById('loading').classList.remove('visible');
     }
   }
 
   // ── File input ─────────────────────────────────────────────────
   document.getElementById('file-input').addEventListener('change', e => {
-    if (e.target.files[0]) {
-      renderFile(e.target.files[0]);
-      e.target.value = '';
-    }
+    if (e.target.files[0]) { renderFile(e.target.files[0]); e.target.value = ''; }
   });
 
   // ── Drag and drop ──────────────────────────────────────────────
   const dropZone = document.getElementById('drop-zone');
+  const pickMD = files => [...files].find(f => /\.(md|markdown|txt)$/i.test(f.name));
 
   document.addEventListener('dragover', e => e.preventDefault());
   document.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
-    const file = [...(e.dataTransfer.files || [])].find(
-      f => /\.(md|markdown|txt)$/i.test(f.name)
-    );
-    if (file) renderFile(file);
+    const f = pickMD(e.dataTransfer.files || []);
+    if (f) renderFile(f);
   });
-
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 
-  // Drop onto already-loaded content replaces it
-  document.getElementById('content-panel').addEventListener('dragover', e => e.preventDefault());
-  document.getElementById('content-panel').addEventListener('drop', e => {
+  document.getElementById('content-layout').addEventListener('dragover', e => e.preventDefault());
+  document.getElementById('content-layout').addEventListener('drop', e => {
     e.preventDefault();
-    const file = [...(e.dataTransfer.files || [])].find(
-      f => /\.(md|markdown|txt)$/i.test(f.name)
-    );
-    if (file) renderFile(file);
+    const f = pickMD(e.dataTransfer.files || []);
+    if (f) renderFile(f);
   });
 
   // ── PDF export ─────────────────────────────────────────────────
