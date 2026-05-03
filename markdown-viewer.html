@@ -258,12 +258,79 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Diagram zoom: expand button shown on hover ──────────────── */
+    .mermaid { position: relative; }
+    .diagram-expand {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(255,255,255,.9);
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      padding: 4px 6px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity .15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #57606a;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .diagram-expand:hover { background: #f6f8fa; border-color: #0969da; color: #0969da; }
+    .mermaid:hover .diagram-expand { opacity: 1; }
+
+    /* ── Diagram lightbox modal ───────────────────────────────────── */
+    #diagram-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    #diagram-modal.open { display: flex; }
+    #modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(1,4,9,.5);
+      cursor: pointer;
+    }
+    #modal-box {
+      position: relative;
+      z-index: 1;
+      background: white;
+      border-radius: 8px;
+      padding: 44px 24px 24px;
+      max-width: 95vw;
+      max-height: 92vh;
+      overflow: auto;
+      box-shadow: 0 16px 48px rgba(1,4,9,.4);
+    }
+    #modal-close {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #57606a;
+      font-size: 22px;
+      line-height: 1;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #modal-close:hover { background: #f6f8fa; color: #1f2328; }
+    #modal-diagram svg { max-width: none !important; display: block; }
+
     /* ── Print / PDF ──────────────────────────────────────────────── */
     @page { margin: 18mm 15mm; }
 
     @media print {
-      #toolbar, #drop-zone, .wiki-header,
-      #toc-sidebar, #loading { display: none !important; }
+      #toolbar, #drop-zone, .wiki-header, #toc-sidebar,
+      #loading, #diagram-modal, .diagram-expand { display: none !important; }
       body { background: white; }
       #app { padding: 0; max-width: 100%; }
       #content-layout { display: block !important; }
@@ -364,6 +431,15 @@
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept=".md,.markdown,.txt" style="display:none">
 
+<!-- ── Diagram zoom modal ────────────────────────────────────────── -->
+<div id="diagram-modal" role="dialog" aria-modal="true" aria-label="Diagram zoom">
+  <div id="modal-backdrop"></div>
+  <div id="modal-box">
+    <button id="modal-close" aria-label="Close">&#x2715;</button>
+    <div id="modal-diagram"></div>
+  </div>
+</div>
+
 <!-- ── Scripts ──────────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -462,6 +538,51 @@
     headings.forEach(h => tocObserver.observe(h));
   }
 
+  // ── Diagram zoom / lightbox ────────────────────────────────────
+  // Octicon screen-full: 4-corner maximize icon
+  const EXPAND_SVG = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M1 1h5v1.5H2.5V5H1V1Zm9 0h5v4h-1.5V2.5H10V1ZM1 10h1.5v2.5H5V14H1v-4Zm12.5 2.5H11V14h4v-4h-1.5v2.5Z"/>
+  </svg>`;
+
+  function addDiagramZoom(contentEl) {
+    contentEl.querySelectorAll('.mermaid svg').forEach(svg => {
+      const wrap = svg.closest('.mermaid');
+      if (!wrap) return;
+
+      const btn = document.createElement('button');
+      btn.className = 'diagram-expand';
+      btn.setAttribute('aria-label', 'Expand diagram');
+      btn.innerHTML = EXPAND_SVG + 'Expand';
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        openDiagramModal(svg);
+      });
+      wrap.appendChild(btn);
+
+      // Also allow clicking the diagram itself
+      svg.style.cursor = 'zoom-in';
+      svg.addEventListener('click', () => openDiagramModal(svg));
+    });
+  }
+
+  function openDiagramModal(svg) {
+    const diagramEl = document.getElementById('modal-diagram');
+    // Insert a copy of the SVG html so the original stays in place
+    diagramEl.innerHTML = svg.outerHTML;
+    document.getElementById('diagram-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDiagramModal() {
+    document.getElementById('diagram-modal').classList.remove('open');
+    document.getElementById('modal-diagram').innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('modal-backdrop').addEventListener('click', closeDiagramModal);
+  document.getElementById('modal-close').addEventListener('click', closeDiagramModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDiagramModal(); });
+
   // ── Relative-time helper ───────────────────────────────────────
   function relativeTime(ms) {
     const s = Math.round((Date.now() - ms) / 1000);
@@ -477,6 +598,7 @@
 
   // ── Main render function ───────────────────────────────────────
   async function renderFile(file) {
+    closeDiagramModal(); // dismiss any open lightbox before replacing content
     document.getElementById('loading').classList.add('visible');
     try {
       const text = await file.text();
@@ -495,7 +617,10 @@
         suppressErrors: false,
       }).catch(err => console.warn('Mermaid:', err));
 
-      // 4. TOC
+      // 4. Zoom buttons on each rendered diagram
+      addDiagramZoom(contentEl);
+
+      // 5. TOC
       buildTOC(contentEl);
 
       // Show content, update UI chrome
