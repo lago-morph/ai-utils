@@ -95,6 +95,24 @@
     #drop-zone.drag-over { border-color: #0969da; background: #ddf4ff; }
     #drop-zone h2 { margin: 16px 0 8px; font-size: 20px; font-weight: 600; }
     #drop-zone p { margin: 0 0 20px; color: #57606a; font-size: 14px; }
+    #drop-zone .drop-hint { margin: 16px 0 0; font-size: 12px; color: #8b949e; }
+    #drop-zone .drop-divider {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%; max-width: 320px; margin: 12px 0;
+      color: #8b949e; font-size: 12px;
+    }
+    #drop-zone .drop-divider::before,
+    #drop-zone .drop-divider::after {
+      content: ''; flex: 1; height: 1px; background: #d0d7de;
+    }
+    #paste-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; font-size: 12px; font-weight: 600; line-height: 20px;
+      border: 1px solid #d0d7de; border-radius: 6px; cursor: pointer;
+      white-space: nowrap; font-family: inherit;
+      color: #57606a; background: white;
+    }
+    #paste-btn:hover { background: #f6f8fa; border-color: #0969da; color: #0969da; }
 
     /* ── Content layout: main content + TOC sidebar ───────────────── */
     /* Hidden by default; .visible is added by JS when a file loads. */
@@ -427,6 +445,14 @@
             onclick="event.stopPropagation(); document.getElementById('file-input').click()">
       Choose File
     </button>
+    <div class="drop-divider">or</div>
+    <button id="paste-btn" onclick="event.stopPropagation(); pasteFromClipboard()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M5.75 1a.75.75 0 0 0-.75.75v3c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-3a.75.75 0 0 0-.75-.75h-4.5Zm.75 3V2.5h3V4h-3Zm-2.874-.467a.75.75 0 0 0-.752-1.298A1.75 1.75 0 0 0 2 4.75v8.5c0 .966.784 1.75 1.75 1.75h8.5A1.75 1.75 0 0 0 14 13.25v-8.5a1.75 1.75 0 0 0-.874-1.515.75.75 0 1 0-.752 1.298.25.25 0 0 1 .126.217v8.5a.25.25 0 0 1-.25.25h-8.5a.25.25 0 0 1-.25-.25v-8.5a.25.25 0 0 1 .126-.217Z"/>
+      </svg>
+      Paste Markdown
+    </button>
+    <p class="drop-hint">You can also paste (Ctrl+V / ⌘V) anywhere on the page</p>
   </div>
 
   <!-- Two-column layout: content + TOC -->
@@ -701,11 +727,10 @@
   }
 
   // ── Main render function ───────────────────────────────────────
-  async function renderFile(file) {
+  async function renderMarkdown(text, filename, lastModified) {
     closeDiagramModal();
     document.getElementById('loading').classList.add('visible');
     try {
-      const text = await file.text();
       const contentEl = document.getElementById('rendered-content');
       contentEl.innerHTML = marked.parse(text);
 
@@ -735,11 +760,11 @@
       // 5. TOC
       buildTOC(contentEl);
       document.getElementById('export-btn').style.display = 'inline-flex';
-      document.getElementById('content-filename').textContent = file.name;
+      document.getElementById('content-filename').textContent = filename;
       document.getElementById('content-meta').textContent =
-        file.lastModified ? `· modified ${relativeTime(file.lastModified)}` : '';
-      document.getElementById('toolbar-filename').textContent = file.name;
-      document.title = `${file.name} — Markdown Viewer`;
+        lastModified ? `· modified ${relativeTime(lastModified)}` : '';
+      document.getElementById('toolbar-filename').textContent = filename;
+      document.title = `${filename} — Markdown Viewer`;
 
       if (location.hash) {
         const t = document.getElementById(location.hash.slice(1));
@@ -749,6 +774,64 @@
       document.getElementById('loading').classList.remove('visible');
     }
   }
+
+  async function renderFile(file) {
+    const text = await file.text();
+    return renderMarkdown(text, file.name, file.lastModified);
+  }
+
+  // ── Paste support ──────────────────────────────────────────────
+  async function pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text.trim()) renderMarkdown(text, 'Pasted content.md', null);
+    } catch {
+      // Clipboard API unavailable (e.g. file:// without permission); fall back
+      // to a visible textarea for the user to paste into.
+      showPasteDialog();
+    }
+  }
+
+  function showPasteDialog() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(1,4,9,.5);z-index:600;display:flex;align-items:center;justify-content:center';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:white;border-radius:8px;padding:24px;width:min(640px,92vw);display:flex;flex-direction:column;gap:12px;box-shadow:0 16px 48px rgba(1,4,9,.4)';
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <strong style="font-size:14px">Paste Markdown</strong>
+        <button id="paste-dialog-close" style="background:none;border:none;cursor:pointer;font-size:20px;color:#57606a;padding:0 4px">&#x2715;</button>
+      </div>
+      <textarea id="paste-textarea" placeholder="Paste your Markdown here…"
+        style="width:100%;height:320px;font-family:monospace;font-size:13px;border:1px solid #d0d7de;border-radius:6px;padding:10px;resize:vertical;outline:none"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button id="paste-cancel-btn" class="btn btn-secondary">Cancel</button>
+        <button id="paste-render-btn" class="btn btn-green">Render</button>
+      </div>`;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const close = () => document.body.removeChild(overlay);
+    box.querySelector('#paste-dialog-close').addEventListener('click', close);
+    box.querySelector('#paste-cancel-btn').addEventListener('click', close);
+    box.querySelector('#paste-render-btn').addEventListener('click', () => {
+      const text = box.querySelector('#paste-textarea').value;
+      if (text.trim()) { close(); renderMarkdown(text, 'Pasted content.md', null); }
+    });
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    setTimeout(() => box.querySelector('#paste-textarea').focus(), 50);
+  }
+
+  // Global paste listener: fires when Ctrl/Cmd+V is pressed outside an input
+  document.addEventListener('paste', e => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return; // let native paste work
+    const text = e.clipboardData && e.clipboardData.getData('text/plain');
+    if (text && text.trim()) {
+      e.preventDefault();
+      renderMarkdown(text, 'Pasted content.md', null);
+    }
+  });
 
   // ── File input ─────────────────────────────────────────────────
   document.getElementById('file-input').addEventListener('change', e => {
@@ -778,6 +861,10 @@
 
   // ── PDF export ─────────────────────────────────────────────────
   window.exportPDF = () => window.print();
+
+  // Exposed for automated testing: allows tests to call renderMarkdown directly
+  // without needing to simulate clipboard/drag-drop APIs.
+  window.renderMarkdown = renderMarkdown;
 </script>
 
 </body>

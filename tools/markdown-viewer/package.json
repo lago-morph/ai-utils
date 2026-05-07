@@ -1,0 +1,24 @@
+{
+  "name": "markdown-viewer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "playwright.config.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers playwright test --config=playwright.config.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  },
+  "dependencies": {
+    "github-markdown-css": "^5.9.0",
+    "highlight.js": "^11.9.0",
+    "marked": "^9.1.6",
+    "mermaid": "^10.9.5"
+  }
+}
