@@ -126,12 +126,16 @@ a versioned spec with a reference implementation:
 Not a waterfall — each numbered item is one turn of a
 try → observe → adjust loop, and any of them can send the plan back a step.
 
-0. **Survey current projects** (next step). Walk several existing,
+0. **Survey current projects** — DONE 2026-07-02. Walk several existing,
    in-flight repositories and record: where AI instructions live now, what
    is duplicated between repos, what the agent repeatedly gets wrong or has
    to rediscover, which checks exist and where they drift. The output is a
    friction list, ranked. This grounds everything after it in "where I am
    now" rather than "where I imagine I want to be."
+   → Results: [survey-2026-07-02.md](./survey-2026-07-02.md) (ranked
+   friction list, keepers, suggested v0.1 scope) and
+   [survey-2026-07-02-repo-profiles.md](./survey-2026-07-02-repo-profiles.md)
+   (per-repo evidence).
 1. **v0.1 spec** — write `SPEC.md` covering only the two or three
    highest-friction items from the survey (likely AGENTS.md conventions +
    directory structure + deterministic checks). Leave
