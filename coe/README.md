@@ -4,6 +4,30 @@ A proposed standard for repositories that are developed with an AI partner
 (Claude Code or similar). Captured from handwritten notes dated 2026-07-01;
 expanded with interpretation, suggestions, and a proposed roadmap.
 
+## Guiding approach: incremental and empirical
+
+The most important constraint on this whole effort: **what the standard
+looks like at the end will almost certainly not match what it looks like in
+anyone's head at the start.** So the process is iterate/try, not
+specify/build:
+
+- **Grow the standard from real projects, not from theory.** The first
+  input is a survey of current, working repositories — where instructions
+  actually live today, what friction actually occurs — and the standard
+  starts as the smallest thing that fixes observed friction.
+- **Every version is an experiment.** A COE version is a hypothesis
+  ("repos are easier for an AI partner if X"); adoption on a real repo is
+  the test; friction reports are the results. Versions should be small and
+  cheap to abandon.
+- **The standard follows practice, never leads it.** Nothing enters the
+  spec until it has been tried by hand on at least one real repo and kept
+  because it earned its place. The spec documents what already works; it
+  does not prescribe what might.
+- **Expect churn early; design for it.** Because early versions will be
+  wrong, the upgrade/migration path (see "adoption first-class" below)
+  matters from v0.1 — it is what makes changing course cheap instead of
+  painful.
+
 ## Original notes (transcribed)
 
 - Common operating environment (COE)
@@ -48,7 +72,9 @@ copy-paste exercise.
 
 ## Suggested shape of the standard
 
-Treat the COE like a versioned spec with a reference implementation:
+These are candidate mechanisms, not commitments — each one enters the
+standard only after surviving the iteration loop below. Treat the COE like
+a versioned spec with a reference implementation:
 
 - **A spec document** (`SPEC.md`) using MUST / SHOULD / MAY language,
   versioned (v0.1, v0.2, ...). Small enough to read in one sitting.
@@ -95,21 +121,38 @@ Treat the COE like a versioned spec with a reference implementation:
   propose COE changes" task. This is what makes the standard improve
   instead of rot.
 
-## Suggested roadmap
+## Roadmap as an iteration loop
 
-1. **v0.1 spec** — write `SPEC.md` covering only the highest-leverage
-   pieces: AGENTS.md conventions + directory structure + deterministic
-   checks. Leave sandbox/knowledge-base as "reserved" sections.
-2. **Dogfood** — make ai-utils itself the first conforming repo.
-3. **Reference template** — extract what dogfooding produced into a
-   template directory.
+Not a waterfall — each numbered item is one turn of a
+try → observe → adjust loop, and any of them can send the plan back a step.
+
+0. **Survey current projects** (next step). Walk several existing,
+   in-flight repositories and record: where AI instructions live now, what
+   is duplicated between repos, what the agent repeatedly gets wrong or has
+   to rediscover, which checks exist and where they drift. The output is a
+   friction list, ranked. This grounds everything after it in "where I am
+   now" rather than "where I imagine I want to be."
+1. **v0.1 spec** — write `SPEC.md` covering only the two or three
+   highest-friction items from the survey (likely AGENTS.md conventions +
+   directory structure + deterministic checks). Leave
+   sandbox/knowledge-base as "reserved" sections. Explicitly mark v0.x as
+   unstable: anything can change based on usage.
+2. **Dogfood** — apply v0.1 by hand to ai-utils and one or two of the
+   surveyed repos. Keep a running log of what was annoying, ignored, or
+   wrong; that log is the v0.2 backlog.
+3. **Reference template** — extract what dogfooding actually produced
+   (not what the spec said) into a template directory.
 4. **Installer** — `/coe-init` slash command that applies the template to a
-   fresh repo; then `/coe-upgrade` with a version stamp (`coe.yaml`).
+   fresh repo; then `/coe-upgrade` with a version stamp (`coe.yaml`). Only
+   automate once the manual process has stabilized enough to be worth
+   automating.
 5. **Conformance CI** — GH Action validating the manifest and required
-   structure; add it to the template.
+   structure; warnings first, failures only once a rule has survived a few
+   iterations without being changed.
 6. **Rounds 2+** — sandbox manifest → devcontainer generation, knowledge
    base, retrospection skill. Each lands as a spec version bump plus an
-   upgrader migration.
+   upgrader migration, and each goes through the same
+   try-by-hand-first loop.
 
 ## Open questions
 
