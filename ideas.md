@@ -1,2 +1,0 @@
-- slash commands that set up agents, skills, prompts, slash commands from this repository
-- set of tools preconfigured that can be easily installed in projects 
