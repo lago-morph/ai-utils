@@ -964,7 +964,8 @@
   // Tag each table / code block that doesn't fit a portrait page:
   //   code block:  wider than portrait            → landscape
   //                wider than landscape           → landscape + wrap lines
-  //   table:       fits portrait with normal word wrapping → stays portrait
+  //   table:       commas in cell code are made break points first, then:
+  //                fits portrait with normal word wrapping → stays portrait
   //                otherwise (a word would have to break)  → landscape
   //                still too wide in landscape             → landscape + break words
   function preparePrintLayout() {
@@ -1013,6 +1014,16 @@
     } finally {
       probe.remove();
     }
+
+    // Keep the heading(s) directly above a wide element on its landscape
+    // page instead of stranding them at the bottom of the portrait page.
+    contentEl.querySelectorAll('.print-wide').forEach(el => {
+      for (let prev = el.previousElementSibling;
+           prev && /^H[1-6]$/.test(prev.tagName);
+           prev = prev.previousElementSibling) {
+        prev.classList.add('print-wide');
+      }
+    });
   }
 
   // Covers both the Export PDF button and the browser's own Ctrl/⌘+P.

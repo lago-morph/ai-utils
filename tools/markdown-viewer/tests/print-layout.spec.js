@@ -5,10 +5,9 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
+const { loadPage, ROOT } = require('./helpers');
 
-const PAGE_URL = `file://${path.resolve(__dirname, '..', 'markdown-viewer.html')}`;
-const WIDE_MD = fs.readFileSync(
-  path.resolve(__dirname, '..', 'test-pages', 'wide-content.md'), 'utf8');
+const WIDE_MD = fs.readFileSync(path.join(ROOT, 'test-pages', 'wide-content.md'), 'utf8');
 
 // Must match PRINT_PORTRAIT_PX / PRINT_LANDSCAPE_PX in markdown-viewer.html.
 const PORTRAIT_PX = 680;
@@ -27,13 +26,38 @@ const EXPECTED = {
   'L-CODE-LIST': ['print-wide'],
 };
 
-// Real libraries and stylesheets are loaded (no stubs): measurements
-// depend on the actual GitHub markdown CSS.
+// Headings directly above a wide element move to its landscape page.
+const EXPECTED_WIDE_HEADINGS = [
+  'Code block that needs landscape',
+  'Table too wide even for landscape',
+  'Code block too wide even for landscape',
+];
+
+// Measurements depend on the real GitHub markdown CSS, which loadPage
+// serves from node_modules.
 async function renderWidePage(page) {
-  await page.goto(PAGE_URL);
-  await page.waitForFunction(() => typeof window.renderMarkdown === 'function');
+  await loadPage(page);
   await page.evaluate(t => window.renderMarkdown(t, 'wide-content.md', null), WIDE_MD);
   await page.evaluate(() => document.fonts.ready);
+}
+
+// Min-content width (narrowest without breaking words) of the table
+// whose text contains `marker`.
+function tableMinWidth(page, marker) {
+  return page.evaluate(marker => {
+    const article = document.getElementById('rendered-content');
+    const table = [...article.querySelectorAll('table')]
+      .find(t => t.textContent.includes(marker));
+    const box = document.createElement('div');
+    box.style.cssText = 'position:absolute;width:0;visibility:hidden';
+    const clone = table.cloneNode(true);
+    clone.style.cssText = 'display:table;width:auto;max-width:none';
+    article.appendChild(box);
+    box.appendChild(clone);
+    const w = clone.offsetWidth;
+    box.remove();
+    return w;
+  }, marker);
 }
 
 function printClasses(page) {
@@ -62,6 +86,25 @@ test.describe('Print layout for wide content', () => {
     await renderWidePage(page);
     await page.evaluate(() => window.preparePrintLayout());
     expect(await printClasses(page)).toEqual(EXPECTED);
+  });
+
+  test('headings directly above a wide element go on its landscape page', async ({ page }) => {
+    await renderWidePage(page);
+    await page.evaluate(() => window.preparePrintLayout());
+    const wideHeadings = await page.evaluate(() =>
+      [...document.querySelectorAll('#rendered-content :is(h1,h2,h3,h4,h5,h6).print-wide')]
+        .map(h => h.textContent.trim()));
+    expect(wideHeadings).toEqual(EXPECTED_WIDE_HEADINGS);
+  });
+
+  test('comma breaks are applied before deciding on landscape', async ({ page }) => {
+    await renderWidePage(page);
+    // Without comma breaks the table is too wide for portrait...
+    expect(await tableMinWidth(page, 'P-TABLE-COMMA')).toBeGreaterThan(PORTRAIT_PX);
+    // ...with them it fits, so it stays portrait.
+    await page.evaluate(() => window.preparePrintLayout());
+    expect(await tableMinWidth(page, 'P-TABLE-COMMA')).toBeLessThanOrEqual(PORTRAIT_PX);
+    expect((await printClasses(page))['P-TABLE-COMMA']).toEqual([]);
   });
 
   test('beforeprint / afterprint add and remove print state', async ({ page }) => {
