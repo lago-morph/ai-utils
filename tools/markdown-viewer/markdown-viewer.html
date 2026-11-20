@@ -374,6 +374,9 @@
 
     /* ── Print / PDF ──────────────────────────────────────────────── */
     @page { margin: 18mm 15mm; }
+    /* Named landscape page for elements too wide for portrait (Chrome).
+       preparePrintLayout() tags those elements with .print-wide. */
+    @page wide { size: landscape; }
 
     @media print {
       #toolbar, #drop-zone, .wiki-header, #toc-sidebar,
@@ -394,6 +397,34 @@
       }
       .markdown-body .mermaid svg { max-width: 100% !important; height: auto !important; }
       pre { page-break-inside: avoid; break-inside: avoid; }
+
+      /* Wide tables / code blocks: never clip on paper. Tables lay out as
+         real tables so cell text wraps to the page width. */
+      .markdown-body table {
+        display: table !important;
+        width: auto !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+      }
+      .markdown-body pre,
+      .markdown-body pre code { overflow: visible !important; }
+
+      /* Elements that don't fit portrait go on landscape pages. */
+      .markdown-body .print-wide { page: wide; }
+
+      /* Code wider than even landscape: wrap lines. */
+      .markdown-body pre.print-wrap,
+      .markdown-body pre.print-wrap code {
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+      }
+
+      /* Table wider than even landscape: break words anywhere to fit. */
+      .markdown-body table.print-force th,
+      .markdown-body table.print-force td,
+      .markdown-body table.print-force code {
+        overflow-wrap: anywhere !important;
+      }
     }
   </style>
 </head>
@@ -861,6 +892,134 @@
 
   // ── PDF export ─────────────────────────────────────────────────
   window.exportPDF = () => window.print();
+
+  // ── Print layout: landscape pages for wide tables / code ──────
+  // Usable content width (CSS px, 96/in) inside the @page margins
+  // (15mm left/right). Paper size is chosen in the print dialog, so use
+  // the narrower of A4 and Letter for each orientation:
+  //   portrait:  A4     (210mm − 30mm) = 180mm   ≈ 680px
+  //   landscape: Letter (279.4mm − 30mm) = 249.4mm ≈ 942px
+  const PRINT_PORTRAIT_PX  = 680;
+  const PRINT_LANDSCAPE_PX = 942;
+  const PRINT_CLASSES = ['print-wide', 'print-wrap', 'print-force'];
+
+  // Undo everything preparePrintLayout() added.
+  function cleanupPrintLayout() {
+    const contentEl = document.getElementById('rendered-content');
+    contentEl.querySelectorAll('wbr.print-wbr').forEach(w => {
+      const parent = w.parentNode;
+      w.remove();
+      parent.normalize();
+    });
+    contentEl.querySelectorAll(PRINT_CLASSES.map(c => '.' + c).join(','))
+      .forEach(el => {
+        el.classList.remove(...PRINT_CLASSES);
+        if (!el.classList.length) el.removeAttribute('class');
+      });
+  }
+
+  // Let comma-separated identifiers in table-cell code (e.g.
+  // `accountId,region,vpcId`) wrap after each comma.
+  function addCommaBreaks(contentEl) {
+    contentEl.querySelectorAll('td code, th code').forEach(code => {
+      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach(node => {
+        const parts = node.nodeValue.split(/(?<=,)(?=.)/s);
+        if (parts.length < 2) return;
+        const frag = document.createDocumentFragment();
+        parts.forEach((part, i) => {
+          if (i > 0) {
+            const wbr = document.createElement('wbr');
+            wbr.className = 'print-wbr';
+            frag.appendChild(wbr);
+          }
+          frag.appendChild(document.createTextNode(part));
+        });
+        node.parentNode.replaceChild(frag, node);
+      });
+    });
+  }
+
+  // Horizontal space taken by ancestors between the article edge and `el`
+  // (list / blockquote indentation). The article itself has no padding in
+  // print, so this is measured against its content box.
+  function printIndent(el, contentEl) {
+    const contentBox = node => {
+      const r = node.getBoundingClientRect();
+      const cs = getComputedStyle(node);
+      return {
+        left:  r.left  + parseFloat(cs.borderLeftWidth)  + parseFloat(cs.paddingLeft),
+        right: r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight),
+      };
+    };
+    const parent = el.parentElement;
+    if (!parent || parent === contentEl) return 0;
+    const outer = contentBox(contentEl);
+    const inner = contentBox(parent);
+    return Math.max(0, inner.left - outer.left) + Math.max(0, outer.right - inner.right);
+  }
+
+  // Tag each table / code block that doesn't fit a portrait page:
+  //   code block:  wider than portrait            → landscape
+  //                wider than landscape           → landscape + wrap lines
+  //   table:       fits portrait with normal word wrapping → stays portrait
+  //                otherwise (a word would have to break)  → landscape
+  //                still too wide in landscape             → landscape + break words
+  function preparePrintLayout() {
+    const contentEl = document.getElementById('rendered-content');
+    cleanupPrintLayout();
+    if (!contentEl.offsetParent) return; // nothing rendered
+
+    addCommaBreaks(contentEl);
+
+    // Measure clones in a zero-width box inside the article so the same
+    // .markdown-body styles apply. Tables shrink to their min-content
+    // width (narrowest without breaking words); code blocks are measured
+    // at their full unwrapped width.
+    const probe = document.createElement('div');
+    probe.style.cssText =
+      'position:absolute;left:0;top:0;width:0;height:0;overflow:hidden;visibility:hidden';
+    contentEl.appendChild(probe);
+
+    const measure = (el, css) => {
+      const clone = el.cloneNode(true);
+      clone.removeAttribute('id');
+      clone.style.cssText += css;
+      probe.appendChild(clone);
+      const w = clone.offsetWidth;
+      clone.remove();
+      return w;
+    };
+
+    try {
+      contentEl.querySelectorAll('pre').forEach(pre => {
+        if (pre.closest('table')) return;
+        const need = printIndent(pre, contentEl) +
+          measure(pre, ';width:max-content;max-width:none;');
+        if (need <= PRINT_PORTRAIT_PX) return;
+        pre.classList.add('print-wide');
+        if (need > PRINT_LANDSCAPE_PX) pre.classList.add('print-wrap');
+      });
+
+      contentEl.querySelectorAll('table').forEach(table => {
+        const need = printIndent(table, contentEl) +
+          measure(table, ';display:table;width:auto;max-width:none;');
+        if (need <= PRINT_PORTRAIT_PX) return;
+        table.classList.add('print-wide');
+        if (need > PRINT_LANDSCAPE_PX) table.classList.add('print-force');
+      });
+    } finally {
+      probe.remove();
+    }
+  }
+
+  // Covers both the Export PDF button and the browser's own Ctrl/⌘+P.
+  window.addEventListener('beforeprint', preparePrintLayout);
+  window.addEventListener('afterprint', cleanupPrintLayout);
+  window.preparePrintLayout = preparePrintLayout;
+  window.cleanupPrintLayout = cleanupPrintLayout;
 
   // Exposed for automated testing: allows tests to call renderMarkdown directly
   // without needing to simulate clipboard/drag-drop APIs.
