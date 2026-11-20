@@ -2,53 +2,16 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
+// loadPage serves the CDN dependencies locally: real marked, stubbed
+// highlight.js and mermaid (diagrams stay as raw source text).
+const { loadPage, ROOT } = require('./helpers');
 
-const HTML_PATH = path.resolve(__dirname, '..', 'markdown-viewer.html');
-const TEST_PAGES_DIR = path.resolve(__dirname, '..', 'test-pages');
-const PAGE_URL = `file://${HTML_PATH}`;
-
-const MARKED_JS = path.resolve(__dirname, '..', 'node_modules', 'marked', 'marked.min.js');
+const TEST_PAGES_DIR = path.join(ROOT, 'test-pages');
 
 const TEST_FILES = fs.readdirSync(TEST_PAGES_DIR)
   .filter(f => f.endsWith('.md'))
   .sort()
   .map(f => ({ name: f, path: path.join(TEST_PAGES_DIR, f) }));
-
-// Inject CDN dependencies before page scripts run.
-// - marked: inject the real UMD build (36 KB) so markdown renders correctly
-// - hljs: stub (decorative only; doesn't affect content identity)
-// - mermaid: stub (rendering requires GPU fonts; diagrams left as code blocks)
-async function setupMocks(page) {
-  // Real marked library
-  await page.addInitScript({ path: MARKED_JS });
-
-  // highlight.js stub – no-op
-  await page.addInitScript(() => {
-    window.hljs = {
-      highlightElement: () => {},
-      highlight: (code) => ({ value: code }),
-      getLanguage: () => null,
-    };
-  });
-
-  // mermaid stub – no-op; mermaid divs stay as raw code in tests
-  await page.addInitScript(() => {
-    window.mermaid = {
-      initialize: () => {},
-      run: async () => {},
-    };
-  });
-}
-
-// Navigate to the app and wait for scripts to initialise.
-async function loadPage(page) {
-  await setupMocks(page);
-  await page.goto(PAGE_URL);
-  await page.waitForFunction(
-    () => typeof window.renderMarkdown === 'function',
-    { timeout: 15000 }
-  );
-}
 
 // Invoke renderMarkdown directly (mirrors both the file-drop and paste code path).
 async function renderInPage(page, text, filename) {
