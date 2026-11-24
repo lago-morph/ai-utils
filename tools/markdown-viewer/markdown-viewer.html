@@ -68,9 +68,9 @@
     .btn-green { color: #fff; background: #238636; border-color: rgba(240,246,252,.1); }
     .btn-green:hover { background: #2ea043; }
 
-    /* ── App: wider than v1 to accommodate TOC sidebar ───────────── */
+    /* ── App: room for a landscape sheet (1032px) beside the TOC ──── */
     #app {
-      max-width: 1280px;
+      max-width: 1320px;
       margin: 0 auto;
       padding: 24px 16px;
     }
@@ -138,8 +138,9 @@
       padding: 10px 16px;
       background: #f6f8fa;
       border: 1px solid #d0d7de;
-      border-bottom: none;
-      border-radius: 6px 6px 0 0;
+      border-radius: 6px;
+      max-width: 770px; /* portrait sheet width */
+      margin: 0 auto 16px;
       font-size: 12px;
       color: #57606a;
     }
@@ -148,11 +149,36 @@
     .wiki-meta { color: #57606a; white-space: nowrap; flex-shrink: 0; }
 
     /* ── Markdown body ────────────────────────────────────────────── */
-    .markdown-body {
-      border: 1px solid #d0d7de;
-      border-radius: 0 0 6px 6px;
-      padding: 32px 40px 32px 48px; /* extra left padding for heading anchors */
+    .markdown-body { background: transparent; }
+
+    /* ── Sheets: content shown like PDF pages, without page breaks ── */
+    /* layoutWideContent() groups the article's blocks into sheets:
+       portrait-width for normal content, landscape-width for wide tables /
+       code blocks (and the headings above them). Content widths match the
+       PDF: 680px portrait, 942px landscape (+ padding and border). */
+    .markdown-body .sheet {
       background: white;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      padding: 32px 40px 32px 48px; /* extra left padding for heading anchors */
+      margin: 0 auto 16px;
+    }
+    .markdown-body .sheet-portrait  { max-width: 770px; }
+    .markdown-body .sheet-landscape { max-width: 1032px; }
+    .markdown-body .sheet > :first-child { margin-top: 0 !important; }
+    .markdown-body .sheet > :last-child  { margin-bottom: 0 !important; }
+
+    /* Code wider than even landscape: wrap lines. */
+    .markdown-body pre.wide-wrap,
+    .markdown-body pre.wide-wrap code {
+      white-space: pre-wrap !important;
+      overflow-wrap: anywhere !important;
+    }
+    /* Table wider than even landscape: break words anywhere to fit. */
+    .markdown-body table.wide-force th,
+    .markdown-body table.wide-force td,
+    .markdown-body table.wide-force code {
+      overflow-wrap: anywhere !important;
     }
 
     /* Offset heading scroll targets below the sticky toolbar */
@@ -375,13 +401,28 @@
     /* ── Print / PDF ──────────────────────────────────────────────── */
     @page { margin: 18mm 15mm; }
     /* Named landscape page for elements too wide for portrait (Chrome).
-       preparePrintLayout() tags those elements with .print-wide. */
+       layoutWideContent() tags those elements with .wide. */
     @page wide { size: landscape; }
 
     @media print {
       #toolbar, #drop-zone, .wiki-header, #toc-sidebar,
       #loading, #diagram-modal, .diagram-expand { display: none !important; }
+      /* Print background colours (code boxes, striped table rows) as on
+         screen, even with the dialog's "Background graphics" unticked. */
+      html, body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
       body { background: white; }
+      /* Sheets are a screen-only look; on paper the pages do this job. */
+      .markdown-body .sheet {
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        border-radius: 0 !important;
+        background: none !important;
+      }
       #app { padding: 0; max-width: 100%; }
       #content-layout { display: block !important; }
       .markdown-body {
@@ -410,21 +451,7 @@
       .markdown-body pre code { overflow: visible !important; }
 
       /* Elements that don't fit portrait go on landscape pages. */
-      .markdown-body .print-wide { page: wide; }
-
-      /* Code wider than even landscape: wrap lines. */
-      .markdown-body pre.print-wrap,
-      .markdown-body pre.print-wrap code {
-        white-space: pre-wrap !important;
-        overflow-wrap: anywhere !important;
-      }
-
-      /* Table wider than even landscape: break words anywhere to fit. */
-      .markdown-body table.print-force th,
-      .markdown-body table.print-force td,
-      .markdown-body table.print-force code {
-        overflow-wrap: anywhere !important;
-      }
+      .markdown-body .wide { page: wide; }
     }
   </style>
 </head>
@@ -788,6 +815,10 @@
       // 4. Zoom buttons on each rendered diagram
       addDiagramZoom(contentEl);
 
+      // 4b. Wide tables / code: comma breaks, landscape sheets
+      await document.fonts.ready;
+      layoutWideContent();
+
       // 5. TOC
       buildTOC(contentEl);
       document.getElementById('export-btn').style.display = 'inline-flex';
@@ -893,27 +924,28 @@
   // ── PDF export ─────────────────────────────────────────────────
   window.exportPDF = () => window.print();
 
-  // ── Print layout: landscape pages for wide tables / code ──────
-  // Usable content width (CSS px, 96/in) inside the @page margins
-  // (15mm left/right). Paper size is chosen in the print dialog, so use
-  // the narrower of A4 and Letter for each orientation:
+  // ── Wide content: landscape for wide tables / code ────────────
+  // Used for both the PDF (landscape pages) and the screen (landscape-width
+  // sheets). Widths are the usable content width (CSS px, 96/in) inside the
+  // @page margins (15mm left/right). Paper size is chosen in the print
+  // dialog, so use the narrower of A4 and Letter for each orientation:
   //   portrait:  A4     (210mm − 30mm) = 180mm   ≈ 680px
   //   landscape: Letter (279.4mm − 30mm) = 249.4mm ≈ 942px
-  const PRINT_PORTRAIT_PX  = 680;
-  const PRINT_LANDSCAPE_PX = 942;
-  const PRINT_CLASSES = ['print-wide', 'print-wrap', 'print-force'];
+  const PORTRAIT_PX  = 680;
+  const LANDSCAPE_PX = 942;
+  const WIDE_CLASSES = ['wide', 'wide-wrap', 'wide-force'];
 
-  // Undo everything preparePrintLayout() added.
-  function cleanupPrintLayout() {
-    const contentEl = document.getElementById('rendered-content');
-    contentEl.querySelectorAll('wbr.print-wbr').forEach(w => {
+  // Undo everything layoutWideContent() added.
+  function resetWideLayout(contentEl) {
+    contentEl.querySelectorAll(':scope > .sheet').forEach(sheet => sheet.replaceWith(...sheet.childNodes));
+    contentEl.querySelectorAll('wbr.comma-wbr').forEach(w => {
       const parent = w.parentNode;
       w.remove();
       parent.normalize();
     });
-    contentEl.querySelectorAll(PRINT_CLASSES.map(c => '.' + c).join(','))
+    contentEl.querySelectorAll(WIDE_CLASSES.map(c => '.' + c).join(','))
       .forEach(el => {
-        el.classList.remove(...PRINT_CLASSES);
+        el.classList.remove(...WIDE_CLASSES);
         if (!el.classList.length) el.removeAttribute('class');
       });
   }
@@ -932,7 +964,7 @@
         parts.forEach((part, i) => {
           if (i > 0) {
             const wbr = document.createElement('wbr');
-            wbr.className = 'print-wbr';
+            wbr.className = 'comma-wbr';
             frag.appendChild(wbr);
           }
           frag.appendChild(document.createTextNode(part));
@@ -943,9 +975,9 @@
   }
 
   // Horizontal space taken by ancestors between the article edge and `el`
-  // (list / blockquote indentation). The article itself has no padding in
-  // print, so this is measured against its content box.
-  function printIndent(el, contentEl) {
+  // (list / blockquote indentation). Measured with sheets removed, against
+  // the article's content box.
+  function wideIndent(el, contentEl) {
     const contentBox = node => {
       const r = node.getBoundingClientRect();
       const cs = getComputedStyle(node);
@@ -961,6 +993,35 @@
     return Math.max(0, inner.left - outer.left) + Math.max(0, outer.right - inner.right);
   }
 
+  // Group the article's top-level blocks into screen sheets: a run of
+  // blocks containing wide content (plus the headings directly above it)
+  // gets a landscape sheet, everything else portrait sheets.
+  function wrapSheets(contentEl) {
+    const blocks = [...contentEl.childNodes]
+      .filter(n => !(n.nodeType === Node.TEXT_NODE && !n.nodeValue.trim()));
+    const isWide = blocks.map(n => n.nodeType === Node.ELEMENT_NODE &&
+      (n.classList.contains('wide') || !!n.querySelector('.wide')));
+    for (let i = blocks.length - 1; i > 0; i--) {
+      if (isWide[i] && /^H[1-6]$/.test(blocks[i - 1].tagName || '')) isWide[i - 1] = true;
+    }
+    const wideSet = new Set(blocks.filter((_, i) => isWide[i]));
+
+    let sheet = null;
+    [...contentEl.childNodes].forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE && !node.nodeValue.trim()) {
+        if (sheet) sheet.appendChild(node);
+        return;
+      }
+      const kind = wideSet.has(node) ? 'sheet-landscape' : 'sheet-portrait';
+      if (!sheet || !sheet.classList.contains(kind)) {
+        sheet = document.createElement('div');
+        sheet.className = 'sheet ' + kind;
+        contentEl.insertBefore(sheet, node);
+      }
+      sheet.appendChild(node);
+    });
+  }
+
   // Tag each table / code block that doesn't fit a portrait page:
   //   code block:  wider than portrait            → landscape
   //                wider than landscape           → landscape + wrap lines
@@ -968,9 +1029,12 @@
   //                fits portrait with normal word wrapping → stays portrait
   //                otherwise (a word would have to break)  → landscape
   //                still too wide in landscape             → landscape + break words
-  function preparePrintLayout() {
+  // Headings directly above a wide element go with it. Then group the
+  // content into portrait / landscape sheets for the screen view.
+  // Runs after each render and again before printing.
+  function layoutWideContent() {
     const contentEl = document.getElementById('rendered-content');
-    cleanupPrintLayout();
+    resetWideLayout(contentEl);
     if (!contentEl.offsetParent) return; // nothing rendered
 
     addCommaBreaks(contentEl);
@@ -997,40 +1061,41 @@
     try {
       contentEl.querySelectorAll('pre').forEach(pre => {
         if (pre.closest('table')) return;
-        const need = printIndent(pre, contentEl) +
+        const need = wideIndent(pre, contentEl) +
           measure(pre, ';width:max-content;max-width:none;');
-        if (need <= PRINT_PORTRAIT_PX) return;
-        pre.classList.add('print-wide');
-        if (need > PRINT_LANDSCAPE_PX) pre.classList.add('print-wrap');
+        if (need <= PORTRAIT_PX) return;
+        pre.classList.add('wide');
+        if (need > LANDSCAPE_PX) pre.classList.add('wide-wrap');
       });
 
       contentEl.querySelectorAll('table').forEach(table => {
-        const need = printIndent(table, contentEl) +
+        const need = wideIndent(table, contentEl) +
           measure(table, ';display:table;width:auto;max-width:none;');
-        if (need <= PRINT_PORTRAIT_PX) return;
-        table.classList.add('print-wide');
-        if (need > PRINT_LANDSCAPE_PX) table.classList.add('print-force');
+        if (need <= PORTRAIT_PX) return;
+        table.classList.add('wide');
+        if (need > LANDSCAPE_PX) table.classList.add('wide-force');
       });
     } finally {
       probe.remove();
     }
 
     // Keep the heading(s) directly above a wide element on its landscape
-    // page instead of stranding them at the bottom of the portrait page.
-    contentEl.querySelectorAll('.print-wide').forEach(el => {
+    // page / sheet instead of stranding them on the portrait one.
+    contentEl.querySelectorAll('.wide').forEach(el => {
       for (let prev = el.previousElementSibling;
            prev && /^H[1-6]$/.test(prev.tagName);
            prev = prev.previousElementSibling) {
-        prev.classList.add('print-wide');
+        prev.classList.add('wide');
       }
     });
+
+    wrapSheets(contentEl);
   }
 
-  // Covers both the Export PDF button and the browser's own Ctrl/⌘+P.
-  window.addEventListener('beforeprint', preparePrintLayout);
-  window.addEventListener('afterprint', cleanupPrintLayout);
-  window.preparePrintLayout = preparePrintLayout;
-  window.cleanupPrintLayout = cleanupPrintLayout;
+  // Re-run before printing (Export PDF button and Ctrl/⌘+P) so the PDF
+  // uses up-to-date measurements.
+  window.addEventListener('beforeprint', layoutWideContent);
+  window.layoutWideContent = layoutWideContent;
 
   // Exposed for automated testing: allows tests to call renderMarkdown directly
   // without needing to simulate clipboard/drag-drop APIs.
